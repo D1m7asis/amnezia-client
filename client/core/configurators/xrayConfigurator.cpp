@@ -344,7 +344,7 @@ ErrorCode XrayConfigurator::applyServerSettingsToRemote(const ServerCredentials 
         return errorCode;
     }
     containerConfig.protocolConfig = updated;
-    logger.info() << "Xray applyServerSettings: done, clientId=" << clientId;
+    logger.info() << "Xray applyServerSettings: done";
     return ErrorCode::NoError;
 }
 
@@ -467,7 +467,7 @@ ErrorCode XrayConfigurator::writeServerConfigForSetup(const ServerCredentials &c
         return errorCode;
     }
     containerConfig.protocolConfig = updated;
-    logger.info() << "Xray writeServerConfigForSetup: done, clientId=" << clientId;
+    logger.info() << "Xray writeServerConfigForSetup: done";
     return ErrorCode::NoError;
 }
 

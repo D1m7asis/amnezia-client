@@ -15,6 +15,7 @@
 #include <WS2tcpip.h>
 
 #include <iphlpapi.h>
+#include <netioapi.h>
 #include <IcmpAPI.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +68,7 @@ private:
 private:
     RouterWin() {m_dnsUtil = new DnsUtilsWindows(this);}
     QMultiMap<QString, MIB_IPFORWARDROW> m_ipForwardRows;
+    QList<MIB_IPFORWARD_ROW2> m_ownedIpv6Routes;
     bool m_suspended = false;
     DnsUtilsWindows *m_dnsUtil; 
 };

@@ -36,6 +36,10 @@ class LocalServer : public QObject
 public:
     explicit LocalServer(QObject* parent = nullptr);
     ~LocalServer();
+#ifdef Q_OS_WIN
+    void shutdown();
+    bool m_shutdownPerformed = false;
+#endif
     QSharedPointer<QLocalServer> m_server;
     IpcServer m_ipcServer;
     QRemoteObjectHost m_serverNode;

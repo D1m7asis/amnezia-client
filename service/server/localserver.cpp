@@ -12,6 +12,7 @@
 #include "ipc.h"
 #include "killswitch.h"
 #include "logger.h"
+#include "router.h"
 
 #ifdef Q_OS_WIN
     #include "tapcontroller_win.h"
@@ -69,12 +70,28 @@ LocalServer::LocalServer(QObject *parent) : QObject(parent),
 #ifdef Q_OS_WIN
     // Signal handling for a proper shutdown.
     QObject::connect(qApp, &QCoreApplication::aboutToQuit,
-                     []() { WindowsDaemon::instance()->deactivate(); });
+                     this, [this]() { shutdown(); });
 #endif
 }
 
 LocalServer::~LocalServer()
 {
+#ifdef Q_OS_WIN
+    shutdown();
+#endif
     qDebug() << "Local server stopped";
 }
+
+#ifdef Q_OS_WIN
+void LocalServer::shutdown()
+{
+    if (!m_shutdownPerformed) {
+        m_shutdownPerformed = true;
+        Router::clearSavedRoutes();
+        Router::restoreResolvers();
+        Router::StartRoutingIpv6();
+        daemon.deactivate();
+    }
+}
+#endif
 

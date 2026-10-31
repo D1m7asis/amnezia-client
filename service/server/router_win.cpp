@@ -1,4 +1,5 @@
 #include "router_win.h"
+#include "version.h"
 
 #include <string>
 #include <tlhelp32.h>
@@ -536,6 +537,42 @@ bool RouterWin::StopRoutingIpv6()
 {
     qDebug() << "RouterWin::StopRoutingIpv6";
 
+#if D1MISVPN_WINDOWS_FORK
+    const auto loopback = findLoopbackIface();
+    if (!loopback.isValid()) {
+        return false;
+    }
+    for (const auto &subnet : kIpv6Subnets) {
+        MIB_IPFORWARD_ROW2 row;
+        InitializeIpForwardEntry(&row);
+        row.InterfaceIndex = loopback.index();
+        row.DestinationPrefix.Prefix.Ipv6.sin6_family = AF_INET6;
+        row.DestinationPrefix.PrefixLength = static_cast<UINT8>(subnet.section('/', 1).toUInt());
+        const auto address = subnet.section('/', 0, 0).toLatin1();
+        if (inet_pton(AF_INET6, address.constData(), &row.DestinationPrefix.Prefix.Ipv6.sin6_addr) != 1) {
+            return false;
+        }
+        row.NextHop.Ipv6.sin6_family = AF_INET6;
+        row.SitePrefixLength = 0;
+        row.Metric = 0;
+        row.Protocol = MIB_IPPROTO_NETMGMT;
+        row.AutoconfigureAddress = FALSE;
+        row.Publish = FALSE;
+        row.Immortal = FALSE;
+        auto existing = row;
+        if (GetIpForwardEntry2(&existing) == NO_ERROR) {
+            continue;
+        }
+        const auto error = CreateIpForwardEntry2(&row);
+        if (error == NO_ERROR) {
+            m_ownedIpv6Routes.append(row);
+        } else if (error != ERROR_OBJECT_ALREADY_EXISTS) {
+            qWarning() << "Cannot create IPv6 protection route:" << error;
+            return false;
+        }
+    }
+    return true;
+#else
     if (auto loopback = findLoopbackIface(); loopback.isValid()) {
         QFuture<bool> res = QtConcurrent::mappedReduced(kIpv6Subnets, [loopback](const QString &subnet) -> bool {
             int res = QProcess::execute("netsh", { "interface", "ipv6", "add", "route", subnet, QString("interface=%1").arg(loopback.index()), "metric=0", "store=active" });
@@ -550,12 +587,26 @@ bool RouterWin::StopRoutingIpv6()
     }
 
     return false;
+#endif
 }
 
 bool RouterWin::StartRoutingIpv6()
 {
     qDebug() << "RouterWin::StartRoutingIpv6";
 
+#if D1MISVPN_WINDOWS_FORK
+    bool success = true;
+    for (auto it = m_ownedIpv6Routes.begin(); it != m_ownedIpv6Routes.end();) {
+        const auto error = DeleteIpForwardEntry2(&*it);
+        if (error == NO_ERROR || error == ERROR_NOT_FOUND) {
+            it = m_ownedIpv6Routes.erase(it);
+        } else {
+            success = false;
+            ++it;
+        }
+    }
+    return success;
+#else
     if (auto loopback = findLoopbackIface(); loopback.isValid()) {
         QFuture<bool> res = QtConcurrent::mappedReduced(kIpv6Subnets, [loopback](const QString &subnet) -> bool {
             int res = QProcess::execute("netsh", { "interface", "ipv6", "delete", "route", subnet, QString("interface=%1").arg(loopback.index()) });
@@ -567,4 +618,5 @@ bool RouterWin::StartRoutingIpv6()
     }
 
     return false;
+#endif
 }
