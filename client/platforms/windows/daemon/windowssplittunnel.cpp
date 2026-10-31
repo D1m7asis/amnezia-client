@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "windowssplittunnel.h"
+#include "version.h"
 
 #include <qassert.h>
 
@@ -22,6 +23,9 @@
 
 #include <QCoreApplication>
 #include <QFileInfo>
+#include <QFile>
+#include <QCryptographicHash>
+#include <QRegularExpression>
 #include <QNetworkInterface>
 #include <QScopeGuard>
 #include <QUrl>
@@ -216,6 +220,10 @@ std::unique_ptr<WindowsSplitTunnel> WindowsSplitTunnel::create(
                                 nullptr, OPEN_EXISTING, 0, nullptr);
   ;
   if (driverFile == INVALID_HANDLE_VALUE) {
+#if D1MISVPN_WINDOWS_FORK
+    logger.error() << "Shared split-tunnel driver is busy; leaving its owner untouched";
+    return nullptr;
+#endif
     WindowsUtils::windowsLog("Failed to open Driver: ");
     // Only once, if the opening did not work. Try to reboot it. #
     logger.info()
@@ -239,6 +247,7 @@ std::unique_ptr<WindowsSplitTunnel> WindowsSplitTunnel::create(
   }
   if (!initDriver(driverFile)) {
     logger.error() << "Failed to init driver";
+    CloseHandle(driverFile);
     return nullptr;
   }
   // We're ready to talk to the driver, it's alive and setup.
@@ -286,8 +295,13 @@ WindowsSplitTunnel::WindowsSplitTunnel(HANDLE driverIO) : m_driver(driverIO) {
 }
 
 WindowsSplitTunnel::~WindowsSplitTunnel() {
+#if D1MISVPN_WINDOWS_FORK
+  resetDriver(m_driver);
+  CloseHandle(m_driver);
+#else
   CloseHandle(m_driver);
   uninstallDriver();
+#endif
 }
 
 bool WindowsSplitTunnel::excludeApps(const QStringList& appPaths) {
@@ -621,22 +635,50 @@ SC_HANDLE WindowsSplitTunnel::installDriver() {
   LPCWSTR displayName = L"Amnezia Split Tunnel Service";
   QFileInfo driver(qApp->applicationDirPath() + "/" + DRIVER_FILENAME);
   if (!driver.exists()) {
-    logger.error() << "Split Tunnel Driver File not found "
-                   << driver.absoluteFilePath();
+    logger.error() << "Split tunnel driver file not found";
     return (SC_HANDLE)INVALID_HANDLE_VALUE;
   }
-  auto path = driver.absolutePath() + "/" + DRIVER_FILENAME;
-  auto binPath = (const wchar_t*)path.utf16();
-  auto scm_rights = SC_MANAGER_ALL_ACCESS;
-  auto serviceManager = OpenSCManager(nullptr,  // local computer
-                                      nullptr,  // servicesActive database
-                                      scm_rights);
-  auto service = CreateService(
-      serviceManager, DRIVER_SERVICE_NAME, displayName, SERVICE_ALL_ACCESS,
-      SERVICE_KERNEL_DRIVER, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, binPath,
-      nullptr, nullptr, nullptr, nullptr, nullptr);
-  CloseServiceHandle(serviceManager);
-  return service;
+  QString path = driver.absoluteFilePath();
+  auto manager = OpenSCManager(nullptr, nullptr, SC_MANAGER_ALL_ACCESS);
+  if (!manager) {
+    return (SC_HANDLE)INVALID_HANDLE_VALUE;
+  }
+  const auto closeManager = qScopeGuard([&] { CloseServiceHandle(manager); });
+#if D1MISVPN_WINDOWS_FORK
+  auto original = OpenServiceW(manager, L"AmneziaVPN-service", SERVICE_QUERY_CONFIG);
+  if (original) {
+    const auto closeOriginal = qScopeGuard([&] { CloseServiceHandle(original); });
+    DWORD size = 0;
+    QueryServiceConfigW(original, nullptr, 0, &size);
+    if (!size) {
+      return (SC_HANDLE)INVALID_HANDLE_VALUE;
+    }
+    QByteArray storage(size, '\0');
+    auto *config = reinterpret_cast<QUERY_SERVICE_CONFIGW *>(storage.data());
+    if (!QueryServiceConfigW(original, config, size, &size)) {
+      return (SC_HANDLE)INVALID_HANDLE_VALUE;
+    }
+    const auto command = QString::fromWCharArray(config->lpBinaryPathName);
+    const QRegularExpression executable(QStringLiteral("^\"?(.+?\\.exe)\"?(?:\\s|$)"), QRegularExpression::CaseInsensitiveOption);
+    const auto match = executable.match(command);
+    if (!match.hasMatch()) {
+      return (SC_HANDLE)INVALID_HANDLE_VALUE;
+    }
+    const QString originalPath = QFileInfo(match.captured(1)).absolutePath() + "/" + DRIVER_FILENAME;
+    QFile originalFile(originalPath);
+    QFile ownFile(path);
+    if (!originalFile.open(QIODevice::ReadOnly) || !ownFile.open(QIODevice::ReadOnly)
+        || QCryptographicHash::hash(originalFile.readAll(), QCryptographicHash::Sha256)
+           != QCryptographicHash::hash(ownFile.readAll(), QCryptographicHash::Sha256)) {
+      logger.error() << "Official split-tunnel driver differs; leaving the shared driver untouched";
+      return (SC_HANDLE)INVALID_HANDLE_VALUE;
+    }
+    path = originalPath;
+  }
+#endif
+  return CreateServiceW(manager, DRIVER_SERVICE_NAME, displayName, SERVICE_ALL_ACCESS,
+                        SERVICE_KERNEL_DRIVER, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL,
+                        reinterpret_cast<const wchar_t *>(path.utf16()), nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 // static
 bool WindowsSplitTunnel::uninstallDriver() {

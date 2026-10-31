@@ -1,7 +1,13 @@
 #include "updateUiController.h"
+#include "core/utils/appUiConfig.h"
 
 #include <QDate>
 #include <QLocale>
+
+bool UpdateUiController::appUpdatesEnabled() const
+{
+    return CLIENT_ENABLE_APP_UPDATES != 0;
+}
 
 UpdateUiController::UpdateUiController(UpdateController* updateController, QObject *parent)
     : QObject(parent), m_updateController(updateController)

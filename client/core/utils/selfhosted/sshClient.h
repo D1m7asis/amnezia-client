@@ -11,6 +11,7 @@
 #include "core/utils/errorCodes.h"
 #include "core/utils/routeModes.h"
 #include "core/utils/commonStructs.h"
+#include "sshManagementTransport.h"
 
 using namespace amnezia;
 
@@ -25,8 +26,8 @@ namespace libssh {
     {
         Q_OBJECT
     public:
-        Client() = default;
-        ~Client() = default;
+        explicit Client(QObject *parent = nullptr, const QString &managementExecutable = {});
+        ~Client() override;
 
         ErrorCode connectToHost(const ServerCredentials &credentials);
         void disconnectFromHost();
@@ -43,15 +44,19 @@ namespace libssh {
         ErrorCode closeChannel();
         void closeScpSession();
         ErrorCode fromLibsshErrorCode();
+        ErrorCode verifyHostKey(const ServerCredentials &credentials);
         ErrorCode fromFileErrorCode(QFileDevice::FileError fileError);
         static int callback(const char *prompt, char *buf, size_t len, int echo, int verify, void *userdata);
 
         ssh_session m_session = nullptr;
         ssh_channel m_channel = nullptr;
         ssh_scp m_scpSession = nullptr;
+        SshManagementTransport m_managementTransport;
+        QByteArray m_credentialsFingerprint;
 
         static std::function<QString()> m_passphraseCallback;
     signals:
+        void managementStageChanged(const QString &stage);
         void writeToChannelFinished();
         void scpFileCopyFinished();
     };

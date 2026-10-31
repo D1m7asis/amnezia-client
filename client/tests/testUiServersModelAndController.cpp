@@ -6,6 +6,8 @@
 #include <QSignalSpy>
 #include <QModelIndex>
 #include <QTest>
+#include <QTemporaryFile>
+#include <QScopeGuard>
 
 #include "utils/testCoreController.h"
 #include "core/models/serverDescription.h"
@@ -141,6 +143,52 @@ private slots:
         if (m_coreController->m_serversModel) {
             m_coreController->m_serversModel->updateModel(QVector<ServerDescription>(), QString{});
         }
+    }
+
+    void testSshManagementSettingsPersistAndHideSecrets() {
+        SelfHostedAdminServerConfig config;
+        config.hostName = QStringLiteral("203.0.113.10");
+        config.userName = QStringLiteral("root");
+        config.password = QStringLiteral("synthetic-private-key");
+        config.port = 2222;
+        config.defaultContainer = DockerContainer::Xray;
+        const QString id = m_coreController->m_serversRepository->addServer(
+            QString(), config.toJson(), serverConfigUtils::ConfigType::SelfHostedAdmin);
+        const auto cleanup = qScopeGuard([&] { m_coreController->m_serversRepository->removeServer(id); });
+        auto ui = m_coreController->m_serversUiController;
+        ui->setProcessedServerId(id);
+        const QString pin = QStringLiteral("SHA256:")
+            + QString::fromLatin1(QByteArray(32, 'p').toBase64(QByteArray::OmitTrailingEquals));
+        const QJsonObject outbound {
+            {"protocol", "vless"},
+            {"settings", QJsonObject{{"vnext", QJsonArray{QJsonObject{
+                {"address", "203.0.113.10"}, {"port", 443},
+                {"users", QJsonArray{QJsonObject{{"id", "synthetic-uuid"}}}}}}}}},
+            {"streamSettings", QJsonObject{{"network", "xhttp"}, {"security", "reality"},
+                {"realitySettings", QJsonObject{{"publicKey", "synthetic-reality-key"}}}}}
+        };
+        QTemporaryFile profile;
+        QVERIFY(profile.open());
+        profile.write(QJsonDocument(QJsonObject{{"outbounds", QJsonArray{outbound}}}).toJson());
+        profile.flush();
+        QVERIFY(ui->saveSshManagement("xray", "203.0.113.10", 2222, pin, QUrl::fromLocalFile(profile.fileName())));
+        const auto safe = ui->sshManagementSettings();
+        QCOMPARE(safe.value("transport").toString(), QStringLiteral("xray"));
+        QVERIFY(safe.value("hasProfile").toBool());
+        const auto publicJson = QJsonDocument(safe).toJson();
+        QVERIFY(!publicJson.contains("synthetic-private-key"));
+        QVERIFY(!publicJson.contains("synthetic-uuid"));
+        QVERIFY(!publicJson.contains("synthetic-reality-key"));
+        QVERIFY(!ui->saveSshManagement("xray", "203.0.113.10", 2222, "bad-pin", {}));
+        QCOMPARE(ui->sshManagementSettings(), safe);
+        QVERIFY(ui->saveSshManagement("xray", "203.0.113.10", 22022, pin, {}));
+        m_coreController->m_serversRepository->invalidateCache();
+        const auto saved = m_coreController->m_serversRepository->selfHostedAdminConfig(id);
+        QVERIFY(saved.has_value());
+        QCOMPARE(saved->hostName, config.hostName);
+        QCOMPARE(saved->port, config.port);
+        QCOMPARE(saved->sshManagement.targetPort, 22022);
+        QCOMPARE(saved->sshManagement.xrayConfig.value("outbounds").toArray().size(), 1);
     }
 
     void testUiServersModelAndControllerRoles() {

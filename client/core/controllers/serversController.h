@@ -37,6 +37,7 @@ public:
 
     // Server management
     bool renameServer(const QString &serverId, const QString &name);
+    bool setSshManagement(const QString &serverId, const SshManagementConfig &config);
     void removeServer(const QString &serverId);
     void setDefaultServer(const QString &serverId);
 

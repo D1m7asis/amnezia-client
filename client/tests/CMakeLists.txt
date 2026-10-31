@@ -23,6 +23,7 @@ add_library(test_common OBJECT
     utils/testUtils.cpp
     ${TEST_QRC}
 )
+target_compile_definitions(test_common PRIVATE CLIENT_KEYCHAIN_NAME_STR=\"${CLIENT_KEYCHAIN_NAME}-Tests\")
 
 qt_add_repc_replicas(test_common
     ../../ipc/ipc_interface.rep
@@ -41,6 +42,11 @@ target_include_directories(test_common PUBLIC
 )
 
 if(NOT ANDROID)
+    add_executable(test_ssh_management testSshManagement.cpp)
+    target_link_libraries(test_ssh_management PRIVATE Qt6::Test test_common)
+    add_executable(test_ssh_management_runtime testSshManagementRuntime.cpp)
+    target_link_libraries(test_ssh_management_runtime PRIVATE Qt6::Test test_common)
+
     add_executable(test_multiple_imports
         testMultipleImports.cpp
     )
@@ -393,6 +399,8 @@ endif()
 enable_testing()
 
 if(NOT ANDROID)
+    add_test(NAME SshManagementConfigTest          COMMAND test_ssh_management)
+    add_test(NAME SshManagementRuntimeTest         COMMAND test_ssh_management_runtime)
     add_test(NAME MultipleImportsTest              COMMAND test_multiple_imports)
     add_test(NAME ServerEditTest                   COMMAND test_server_edit)
     add_test(NAME DefaultServerChangeTest          COMMAND test_default_server_change)

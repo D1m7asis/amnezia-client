@@ -2,6 +2,7 @@
 #define SERVERSUICONTROLLER_H
 
 #include <QObject>
+#include <QUrl>
 
 #include <QSet>
 #include <QJsonObject>
@@ -30,6 +31,7 @@ class ServersUiController : public QObject
     Q_PROPERTY(bool defaultServerHasOutdatedAwgContainer READ defaultServerHasOutdatedAwgContainer NOTIFY defaultServerIdChanged)
     
     Q_PROPERTY(QString processedServerId READ getProcessedServerId WRITE setProcessedServerId NOTIFY processedServerIdChanged)
+    Q_PROPERTY(QString sshManagementStatus READ sshManagementStatus NOTIFY sshManagementStatusChanged)
     Q_PROPERTY(int processedContainerIndex READ getProcessedContainerIndex WRITE setProcessedContainerIndex NOTIFY processedContainerIndexChanged)
     Q_PROPERTY(bool processedServerIsPremium READ processedServerIsPremium NOTIFY processedServerIdChanged)
     
@@ -52,6 +54,11 @@ public slots:
     void removeServerAtIndex(int index);
 
     void editServerName(const QString &serverId, const QString &name);
+    QJsonObject sshManagementSettings() const;
+    bool saveSshManagement(const QString &transport, const QString &host, int port,
+                           const QString &fingerprint, const QUrl &profileFile);
+    QString testSshManagement();
+    QString sshManagementStatus() const { return m_sshManagementStatus; }
 
     void setDefaultServer(const QString &serverId);
     void setDefaultServerAtIndex(int index);
@@ -112,6 +119,7 @@ public slots:
     QStringList getAllInstalledServicesName(int serverIndex) const;
 
 signals:
+    void sshManagementStatusChanged();
     void errorOccurred(const QString &errorMessage);
     void finished(const QString &message);
     void defaultServerIdChanged(const QString &serverId);
@@ -141,6 +149,7 @@ private:
     QVector<amnezia::ServerDescription> m_orderedServerDescriptions;
     
     QString m_processedServerId;
+    QString m_sshManagementStatus;
     int m_processedContainerIndex = -1;
 };
 

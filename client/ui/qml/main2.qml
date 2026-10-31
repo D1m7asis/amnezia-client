@@ -73,7 +73,7 @@ Window  {
         console.warn("Scene graph error:", error, message)
     }
 
-    title: "AmneziaVPN"
+    title: Qt.application.displayName
 
     Item { // This item is needed for focus handling
         id: defaultFocusItem
@@ -442,6 +442,8 @@ Window  {
     FileDialog {
         id: mainFileDialog
         objectName: "mainFileDialog"
+        options: Qt.platform.os === "windows" && Qt.application.name === "D1m7asisVPN"
+                 ? FileDialog.DontUseNativeDialog : 0
 
         property bool isSaveMode: false
 

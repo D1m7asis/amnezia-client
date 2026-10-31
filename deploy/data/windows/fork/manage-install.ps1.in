@@ -1,0 +1,32 @@
+[CmdletBinding()]
+param([Parameter(Mandatory)][ValidateSet('Install','Uninstall')][string]$Action)
+$ErrorActionPreference='Stop'
+$installRoot=[IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
+if($installRoot -eq [IO.Path]::GetPathRoot($installRoot).TrimEnd('\')){throw 'Refusing to manage an installation at the filesystem root'}
+$prefix=$installRoot+'\'
+$ownNames=@('@CLIENT_SERVICE_NAME@','AmneziaWGTunnel$@CLIENT_APPLICATION_NAME@')
+function Service-Executable([string]$CommandLine){
+    if($CommandLine -match '^"([^"]+)"'){return [IO.Path]::GetFullPath($Matches[1])}
+    if($CommandLine -match '^(.*?\.exe)(?:\s|$)'){return [IO.Path]::GetFullPath($Matches[1])}
+    throw 'Cannot verify service executable path'
+}
+foreach($name in $ownNames){
+    $service=Get-CimInstance Win32_Service -Filter "Name='$name'"
+    if(-not $service){continue}
+    $executable=Service-Executable $service.PathName
+    if(-not $executable.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Refusing to change a service from another installation'}
+    Stop-Service -Name $name -Force
+    if($Action -eq 'Uninstall' -or $name -ne '@CLIENT_SERVICE_NAME@'){
+        & sc.exe delete $name | Out-Null
+        if($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1072){throw 'Cannot remove the owned service'}
+    }
+}
+$ownedExecutables=@((Join-Path $installRoot '@CLIENT_APPLICATION_NAME@.exe'),(Join-Path $installRoot '@CLIENT_SERVICE_NAME@.exe'))
+foreach($process in Get-CimInstance Win32_Process){
+    if($ownedExecutables -notcontains $process.ExecutablePath){continue}
+    $current=Get-CimInstance Win32_Process -Filter "ProcessId=$($process.ProcessId)"
+    if($current -and $current.ExecutablePath -eq $process.ExecutablePath -and $current.CreationDate -eq $process.CreationDate){
+        Stop-Process -Id $process.ProcessId -Force
+    }
+}
+# Encrypted profiles and the shared signed split-tunnel driver are retained.

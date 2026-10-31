@@ -49,6 +49,10 @@ QString errorString(ErrorCode code) {
     case(ErrorCode::SshPrivateKeyError): errorMessage = QObject::tr("Invalid private key or invalid passphrase entered"); break;
     case(ErrorCode::SshPrivateKeyFormatError): errorMessage = QObject::tr("The selected private key format is not supported, use openssh ED25519 key types or PEM key types"); break;
     case(ErrorCode::SshTimeoutError): errorMessage = QObject::tr("Timeout connecting to server"); break;
+    case(ErrorCode::SshManagementTransportError): errorMessage = QObject::tr("Xray SSH transport is unavailable on the physical network"); break;
+    case(ErrorCode::SshHostKeyUnknownError): errorMessage = QObject::tr("Verify and save the SSH server fingerprint before connecting"); break;
+    case(ErrorCode::SshHostKeyMismatchError): errorMessage = QObject::tr("SSH server fingerprint does not match the trusted key"); break;
+    case(ErrorCode::SshManagementConfigError): errorMessage = QObject::tr("Invalid SSH management transport configuration"); break;
 
     // Ssh scp errors
     case(ErrorCode::SshScpFailureError): errorMessage = QObject::tr("SCP error: Generic failure"); break;

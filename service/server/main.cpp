@@ -5,6 +5,8 @@
 #include "logger.h"
 #include "systemservice.h"
 #include "core/utils/utilities.h"
+#include "managementXrayRunner.h"
+#include <cstring>
 
 #ifdef Q_OS_WIN
 #include "platforms/windows/daemon/windowsdaemontunnel.h"
@@ -44,6 +46,9 @@ int runApplication(int argc, char** argv)
 
 int main(int argc, char **argv)
 {
+    if (argc > 1 && std::strcmp(argv[1], "--management-xray") == 0) {
+        return runManagementXray(argc, argv);
+    }
     Utils::initializePath(Logger::systemLogDir());
 
     if (argc >= 2) {

@@ -33,6 +33,7 @@ ServerCredentials SelfHostedAdminServerConfig::credentials() const
     creds.userName = userName;
     creds.secretData = password;
     creds.port = port;
+    creds.sshManagement = sshManagement;
     return creds;
 }
 
@@ -122,6 +123,9 @@ QJsonObject SelfHostedAdminServerConfig::toJson() const
     if (port > 0) {
         obj[configKey::port] = port;
     }
+    if (sshManagement.isConfigured()) {
+        obj[configKey::sshManagement] = sshManagement.toJson();
+    }
 
     return obj;
 }
@@ -152,6 +156,13 @@ SelfHostedAdminServerConfig SelfHostedAdminServerConfig::fromJson(const QJsonObj
 
     config.userName = json.value(configKey::userName).toString();
     config.password = json.value(configKey::password).toString();
+    if (json.contains(configKey::sshManagement)) {
+        if (json.value(configKey::sshManagement).isObject()) {
+            config.sshManagement = SshManagementConfig::fromJson(json.value(configKey::sshManagement).toObject());
+        } else {
+            config.sshManagement.transport = QStringLiteral("invalid");
+        }
+    }
     if (json.contains(configKey::port)) {
         config.port = json.value(configKey::port).toInt();
     } else {

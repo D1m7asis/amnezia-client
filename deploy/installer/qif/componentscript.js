@@ -86,7 +86,7 @@ Component.prototype.createOperations = function()
 
         let pu_path = installer.value("TargetDir").replace(/\//g, '\\') + "\\"
         component.addElevatedOperation("Execute",
-                                       ["sc", "create", serviceName(), "binpath=", pu_path + serviceName() + ".exe",
+                                       ["sc", "create", serviceName(), "binpath=", "\"" + pu_path + serviceName() + ".exe\"",
                                         "start=", "auto", "depend=", "BFE/nsi"],
                                         "UNDOEXECUTE", "cmd", "/c", pu_path + "post_uninstall.cmd");
 										

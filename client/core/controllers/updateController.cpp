@@ -206,6 +206,10 @@ void UpdateController::openStorePage() const
 
 void UpdateController::startUpdate()
 {
+#if !CLIENT_ENABLE_APP_UPDATES
+    return;
+#endif
+
     if (isStoreUpdate()) {
         openStorePage();
         return;
@@ -239,6 +243,10 @@ QString UpdateController::composeDownloadUrl() const
 
 void UpdateController::downloadInstaller()
 {
+#if !CLIENT_ENABLE_APP_UPDATES
+    return;
+#endif
+
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(MACOS_NE)
     if (m_updateState == UpdateState::State::Downloading) {
         return;
@@ -294,6 +302,10 @@ void UpdateController::downloadInstaller()
 
 void UpdateController::installUpdate()
 {
+#if !CLIENT_ENABLE_APP_UPDATES
+    return;
+#endif
+
 #if !defined(Q_OS_ANDROID) && !defined(Q_OS_IOS) && !defined(MACOS_NE)
     if (m_updateState != UpdateState::State::ReadyToInstall) {
         logger.error() << "Installer is not downloaded yet";

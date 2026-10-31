@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CPackWiXPatch>
-    <CPackWiXFragment Id="CM_CP_AmneziaVPN.AmneziaVPN_service.exe">
+    <CPackWiXFragment Id="CM_CP_AmneziaVPN.@WIX_SERVICE_FILE_ID@">
         <ServiceInstall
                 Id="AmneziaServiceInstall"
-                Name="AmneziaVPN-service"
-                DisplayName="AmneziaVPN Service"
-                Description="Service for AmneziaVPN"
+                Name="@CLIENT_SERVICE_NAME@"
+                DisplayName="@CLIENT_DISPLAY_NAME@ Service"
+                Description="Service for @CLIENT_DISPLAY_NAME@"
                 Start="auto"
                 Type="ownProcess"
                 ErrorControl="normal"
@@ -15,7 +15,7 @@
         </ServiceInstall>
         <ServiceControl
                 Id="AmneziaServiceControl"
-                Name="AmneziaVPN-service"
+                Name="@CLIENT_SERVICE_NAME@"
                 Start="install"
                 Stop="both"
                 Remove="uninstall"

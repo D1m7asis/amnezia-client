@@ -13,6 +13,7 @@ namespace amnezia
         constexpr QLatin1String password("password");
         constexpr QLatin1String port("port");
         constexpr QLatin1String localPort("local_port");
+        constexpr QLatin1String sshManagement("sshManagement");
 
         constexpr QLatin1String dns1("dns1");
         constexpr QLatin1String dns2("dns2");

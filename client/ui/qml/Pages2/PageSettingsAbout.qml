@@ -146,6 +146,7 @@ PageType {
 
             BasicButtonType {
                 id: checkUpdatesButton
+                visible: UpdateController.appUpdatesEnabled
 
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 8
@@ -166,6 +167,16 @@ PageType {
 
                 clickedFunc: function() {
                     UpdateController.checkForUpdates()
+                }
+            }
+
+            BasicButtonType {
+                visible: !UpdateController.appUpdatesEnabled
+                Layout.alignment: Qt.AlignHCenter
+                Layout.bottomMargin: 16
+                text: qsTr("Releases on GitHub")
+                clickedFunc: function() {
+                    Qt.openUrlExternally("https://github.com/D1m7asis/amnezia-client/releases")
                 }
             }
 

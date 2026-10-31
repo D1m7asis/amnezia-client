@@ -539,6 +539,10 @@ Already installed containers were found on the server. All installed containers 
         <source>Servers</source>
         <translation>Серверы</translation>
     </message>
+    <message>
+        <source>Verify internet</source>
+        <translation>Проверить интернет</translation>
+    </message>
 </context>
 <context>
     <name>PageProtocolAwgClientSettings</name>
@@ -3479,6 +3483,10 @@ Create one from the current settings.</source>
         <source>Visit official website</source>
         <translation>Посетить официальный сайт</translation>
     </message>
+    <message>
+        <source>Releases on GitHub</source>
+        <translation>Версии на GitHub</translation>
+    </message>
 </context>
 <context>
     <name>PageSettingsApiAvailableCountries</name>
@@ -4712,6 +4720,66 @@ Create one from the current settings.</source>
         <location filename="../ui/qml/Pages2/PageSettingsServerData.qml" line="212"/>
         <source>Cannot reset API config during active connection</source>
         <translation>Невозможно сбросить конфигурацию API во время активного соединения</translation>
+    </message>
+    <message>
+        <source>SSH management</source>
+        <translation>Управление по SSH</translation>
+    </message>
+    <message>
+        <source>Direct SSH or an independent Xray Reality transport</source>
+        <translation>Прямой SSH или отдельный канал Xray Reality</translation>
+    </message>
+    <message>
+        <source>Reality profile stored securely</source>
+        <translation>Профиль Reality сохранён в защищённом хранилище</translation>
+    </message>
+    <message>
+        <source>No Reality profile imported</source>
+        <translation>Профиль Reality ещё не импортирован</translation>
+    </message>
+    <message>
+        <source>Import Reality client JSON</source>
+        <translation>Импорт клиентского JSON-профиля Reality</translation>
+    </message>
+    <message>
+        <source>New profile selected; save to apply</source>
+        <translation>Новый профиль выбран; сохраните настройки</translation>
+    </message>
+    <message>
+        <source>Direct SSH</source>
+        <translation>Прямой SSH</translation>
+    </message>
+    <message>
+        <source>SSH through Xray Reality</source>
+        <translation>SSH через Xray Reality</translation>
+    </message>
+    <message>
+        <source>SSH destination (empty = server address)</source>
+        <translation>Адрес SSH внутри Reality (пусто = адрес сервера)</translation>
+    </message>
+    <message>
+        <source>SSH port (0 = original port)</source>
+        <translation>Порт SSH внутри Reality (0 = исходный порт)</translation>
+    </message>
+    <message>
+        <source>Trusted SSH fingerprint (SHA256:…)</source>
+        <translation>Доверенный отпечаток SSH (SHA256:…)</translation>
+    </message>
+    <message>
+        <source>Import Reality JSON</source>
+        <translation>Импорт JSON Reality</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Settings saved. Run SSH verification.</source>
+        <translation>Настройки сохранены. Запустите проверку SSH.</translation>
+    </message>
+    <message>
+        <source>Verify saved SSH settings</source>
+        <translation>Проверить сохранённые настройки SSH</translation>
     </message>
 </context>
 <context>
@@ -6877,6 +6945,34 @@ FileZilla или другие SFTP-клиенты, а также смонтир�
         <source>Use the remove action to delete this legacy config.</source>
         <translation>Воспользуйтесь действием &quot;Удалить&quot; чтобы удалить эту устаревшую конфигурацию.</translation>
     </message>
+    <message>
+        <source>Cannot read the local Reality JSON profile (maximum 1 MiB).</source>
+        <translation>Не удалось прочитать локальный JSON-профиль Reality (не более 1 МиБ).</translation>
+    </message>
+    <message>
+        <source>Invalid Reality JSON profile.</source>
+        <translation>Некорректный JSON-профиль Reality.</translation>
+    </message>
+    <message>
+        <source>Invalid SSH management settings. Reality requires a profile and a trusted SHA256 fingerprint.</source>
+        <translation>Некорректные настройки SSH. Для Reality нужны профиль и доверенный отпечаток SHA256.</translation>
+    </message>
+    <message>
+        <source>SSH management settings saved.</source>
+        <translation>Настройки управления SSH сохранены.</translation>
+    </message>
+    <message>
+        <source>An administrator profile is required.</source>
+        <translation>Нужен профиль администратора.</translation>
+    </message>
+    <message>
+        <source>SSH verified: trusted host key, authentication and command succeeded.</source>
+        <translation>SSH проверен: ключ сервера доверенный, авторизация и команда выполнены.</translation>
+    </message>
+    <message>
+        <source>SSH verification failed (error %1). Check transport, host fingerprint and credentials.</source>
+        <translation>Проверка SSH не пройдена (ошибка %1). Проверьте транспорт, отпечаток и данные входа.</translation>
+    </message>
 </context>
 <context>
     <name>ServicesCatalogController</name>
@@ -7219,6 +7315,68 @@ Remove the server from the app to continue.</source>
         <location filename="../ui/qml/main2.qml" line="407"/>
         <source>Cannot remove server during active connection</source>
         <translation>Невозможно удалить сервер во время активного соединения</translation>
+    </message>
+</context>
+<context>
+    <name>NetworkReachabilityController</name>
+    <message>
+        <source>VPN started; internet not verified</source>
+        <translation>VPN запущен; интернет ещё не проверен</translation>
+    </message>
+    <message>
+        <source>Checking HTTPS and exit IP…</source>
+        <translation>Проверяем HTTPS и выходной IP…</translation>
+    </message>
+    <message>
+        <source>Internet verification failed: HTTPS request did not succeed.</source>
+        <translation>Интернет не подтверждён: запрос HTTPS не выполнен.</translation>
+    </message>
+    <message>
+        <source>Internet verification failed: invalid exit IP response.</source>
+        <translation>Интернет не подтверждён: некорректный ответ с выходным IP.</translation>
+    </message>
+    <message>
+        <source>HTTPS works, but exit IP differs from the VPN server: %1</source>
+        <translation>HTTPS работает, но выходной IP отличается от VPN-сервера: %1</translation>
+    </message>
+    <message>
+        <source>HTTPS internet verified; expected server IP is unknown.</source>
+        <translation>Интернет по HTTPS проверен; ожидаемый IP сервера неизвестен.</translation>
+    </message>
+    <message>
+        <source>HTTPS internet and server exit IP verified.</source>
+        <translation>Интернет по HTTPS и выходной IP сервера проверены.</translation>
+    </message>
+</context>
+<context>
+    <name>libssh::Client</name>
+    <message>
+        <source>Validating SSH management settings…</source>
+        <translation>Проверяем настройки управления SSH…</translation>
+    </message>
+    <message>
+        <source>SSH connection failed (error %1).</source>
+        <translation>Ошибка подключения SSH (%1).</translation>
+    </message>
+    <message>
+        <source>Starting Reality management transport…</source>
+        <translation>Запускаем канал управления Reality…</translation>
+    </message>
+    <message>
+        <source>Connecting to SSH…</source>
+        <translation>Подключаемся по SSH…</translation>
+    </message>
+    <message>
+        <source>SSH transport reached; verifying host key…</source>
+        <translation>SSH доступен; проверяем ключ сервера…</translation>
+    </message>
+    <message>
+        <source>SSH host key verified; authenticating…</source>
+        <translation>Ключ SSH проверен; выполняем авторизацию…</translation>
+    </message>
+    <message>
+        <source>SSH authenticated.</source>
+        <translation>Авторизация SSH выполнена.</translation>
     </message>
 </context>
 </TS>

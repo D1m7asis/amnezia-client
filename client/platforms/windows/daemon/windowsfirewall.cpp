@@ -30,9 +30,17 @@
 #include "platforms/windows/windowsutils.h"
 
 #include "killswitch.h"
+#include "version.h"
 
 #define IPV6_ADDRESS_SIZE 16
 
+#if D1MISVPN_WINDOWS_FORK
+DEFINE_GUID(ST_FW_WINFW_BASELINE_SUBLAYER_KEY, 0x90d2eeb9, 0x74f9, 0x4121, 0x81, 0x52, 0xac, 0x60, 0x97, 0x0f, 0x86, 0xcd);
+DEFINE_GUID(ST_FW_WINFW_DNS_SUBLAYER_KEY, 0xe7198c86, 0x3d04, 0x41fa, 0x87, 0xf8, 0x44, 0x1e, 0x43, 0xbb, 0x27, 0x0b);
+DEFINE_GUID(ST_FW_PROVIDER_KEY, 0x66f2be63, 0x24f1, 0x4362, 0x8b, 0x1a, 0xb4, 0xf4, 0x4e, 0xee, 0xd5, 0x9a);
+DEFINE_GUID(ST_FW_SHARED_DRIVER_SUBLAYER_KEY, 0xc78056ff, 0x2bc1, 0x4211, 0xaa, 0xdd, 0x7f, 0x35, 0x8d, 0xef, 0x20, 0x2d);
+DEFINE_GUID(ST_FW_SHARED_DRIVER_DNS_KEY, 0x60090787, 0xcca1, 0x4937, 0xaa, 0xce, 0x51, 0x25, 0x6e, 0xf4, 0x81, 0xf3);
+#else
 // ID for the Firewall Sublayer
 DEFINE_GUID(ST_FW_WINFW_BASELINE_SUBLAYER_KEY, 0xc78056ff, 0x2bc1, 0x4211, 0xaa,
             0xdd, 0x7f, 0x35, 0x8d, 0xef, 0x20, 0x2d);
@@ -41,6 +49,8 @@ DEFINE_GUID(ST_FW_WINFW_DNS_SUBLAYER_KEY, 0x60090787, 0xcca1, 0x4937, 0xaa,
 // ID for the Mullvad Split-Tunnel Sublayer Provider
 DEFINE_GUID(ST_FW_PROVIDER_KEY, 0xe2c114ee, 0xf32a, 0x4264, 0xa6, 0xcb, 0x3f,
             0xa7, 0x99, 0x63, 0x56, 0xd9);
+
+#endif
 
 namespace {
 Logger logger("WindowsFirewall");
@@ -165,11 +175,17 @@ bool WindowsFirewall::initSublayer() {
   }
   auto cleanup = qScopeGuard([&] { FwpmEngineClose0(wfp); });
 
+#if D1MISVPN_WINDOWS_FORK
+  if (!ensureSublayer(wfp, ST_FW_SHARED_DRIVER_SUBLAYER_KEY, L"Amnezia-SplitTunnel-Sublayer", L"Shared signed driver compatibility")
+      || !ensureSublayer(wfp, ST_FW_SHARED_DRIVER_DNS_KEY, L"Amnezia-SplitTunnel-DNS-Sublayer", L"Shared signed driver compatibility")) {
+    return false;
+  }
+#endif
   return ensureSublayer(wfp, ST_FW_WINFW_BASELINE_SUBLAYER_KEY,
-                        L"Amnezia-SplitTunnel-Sublayer",
+                        APPLICATION_NAME_W L"-SplitTunnel-Sublayer",
                         L"Filters that enforce a good baseline") &&
          ensureSublayer(wfp, ST_FW_WINFW_DNS_SUBLAYER_KEY,
-                        L"Amnezia-SplitTunnel-DNS-Sublayer",
+                        APPLICATION_NAME_W L"-SplitTunnel-DNS-Sublayer",
                         L"DNS filters for split tunneling");
 }
 

@@ -224,6 +224,15 @@ void CoreController::initControllers()
     m_networkReachabilityController = new NetworkReachabilityController(this);
     setQmlContextProperty("NetworkReachabilityController", m_networkReachabilityController);
     setQmlContextProperty("NetworkReachability", m_networkReachabilityController);
+    const auto updateVpnInternetState = [this] {
+        m_networkReachabilityController->setVpnConnection(m_connectionUiController->isConnected(),
+            m_serversUiController->serverHostName(m_serversUiController->getDefaultServerId()));
+    };
+    connect(m_connectionUiController, &ConnectionUiController::connectionStateChanged,
+            m_networkReachabilityController, updateVpnInternetState);
+    connect(m_serversUiController, &ServersUiController::defaultServerIdChanged,
+            m_networkReachabilityController, updateVpnInternetState);
+    updateVpnInternetState();
 
     m_servicesCatalogUiController = new ServicesCatalogUiController(m_servicesCatalogController, m_apiServicesModel, this);
     setQmlContextProperty("ServicesCatalogUiController", m_servicesCatalogUiController);

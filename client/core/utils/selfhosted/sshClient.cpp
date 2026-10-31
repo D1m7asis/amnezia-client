@@ -1,114 +1,201 @@
 #include "sshClient.h"
 
+#include <QCryptographicHash>
+#include <QDataStream>
 #include <QEventLoop>
+#include <QJsonDocument>
 #include <QtConcurrent>
+#include <cstring>
 
 #include <fstream>
 
-#ifdef Q_OS_WINDOWS
-const uint32_t S_IRWXU = 0644;
-#endif
-
-namespace libssh {
-    constexpr auto libsshTimeoutError{"Timeout connecting to"};
+namespace libssh
+{
+    constexpr auto libsshTimeoutError { "Timeout connecting to" };
 
     std::function<QString()> Client::m_passphraseCallback;
 
     int Client::callback(const char *prompt, char *buf, size_t len, int echo, int verify, void *userdata)
     {
-        auto passphrase = m_passphraseCallback();
-        passphrase.toStdString().copy(buf, passphrase.size() + 1);
+        if (!m_passphraseCallback || !buf || len == 0) {
+            return SSH_ERROR;
+        }
+        const auto passphrase = m_passphraseCallback().toUtf8();
+        if (static_cast<size_t>(passphrase.size()) >= len) {
+            return SSH_ERROR;
+        }
+        std::memcpy(buf, passphrase.constData(), passphrase.size());
+        buf[passphrase.size()] = '\0';
         return 0;
+    }
+
+    Client::Client(QObject *parent, const QString &managementExecutable)
+        : QObject(parent), m_managementTransport(managementExecutable)
+    {
+    }
+
+    Client::~Client()
+    {
+        disconnectFromHost();
+    }
+
+    ErrorCode Client::verifyHostKey(const ServerCredentials &credentials)
+    {
+        const QString expected = credentials.sshManagement.hostKeySha256;
+        if (expected.isEmpty()) {
+            const auto known = ssh_session_is_known_server(m_session);
+            if (known == SSH_KNOWN_HOSTS_OK) {
+                return ErrorCode::NoError;
+            }
+            return known == SSH_KNOWN_HOSTS_UNKNOWN || known == SSH_KNOWN_HOSTS_NOT_FOUND
+                    ? ErrorCode::SshHostKeyUnknownError
+                    : ErrorCode::SshHostKeyMismatchError;
+        }
+        ssh_key key = nullptr;
+        unsigned char *hash = nullptr;
+        size_t size = 0;
+        if (ssh_get_server_publickey(m_session, &key) != SSH_OK) {
+            return ErrorCode::SshInternalError;
+        }
+        const int result = ssh_get_publickey_hash(key, SSH_PUBLICKEY_HASH_SHA256, &hash, &size);
+        ssh_key_free(key);
+        if (result != SSH_OK) {
+            return ErrorCode::SshInternalError;
+        }
+        const auto actual = QStringLiteral("SHA256:")
+                + QString::fromLatin1(QByteArray(reinterpret_cast<const char *>(hash), static_cast<int>(size))
+                                              .toBase64(QByteArray::OmitTrailingEquals));
+        ssh_clean_pubkey_hash(&hash);
+        return actual == expected ? ErrorCode::NoError : ErrorCode::SshHostKeyMismatchError;
     }
 
     ErrorCode Client::connectToHost(const ServerCredentials &credentials)
     {
-        if (m_session != nullptr) {
-            if (!ssh_is_connected(m_session)) {
-                ssh_free(m_session);
-                m_session = nullptr;
-            }
+        emit managementStageChanged(tr("Validating SSH management settings…"));
+        if (!credentials.isValid()) {
+            disconnectFromHost();
+            return ErrorCode::SshManagementConfigError;
         }
-
-        if (m_session == nullptr) {
+        QByteArray identity;
+        QDataStream stream(&identity, QIODevice::WriteOnly);
+        stream << credentials.hostName << credentials.port << credentials.userName << credentials.secretData
+               << QJsonDocument(credentials.sshManagement.toJson()).toJson(QJsonDocument::Compact);
+        const auto fingerprint = QCryptographicHash::hash(identity, QCryptographicHash::Sha256);
+        const bool viaXray = credentials.sshManagement.transport == QLatin1String("xray");
+        if (m_session && ssh_is_connected(m_session) && fingerprint == m_credentialsFingerprint
+            && (!viaXray || m_managementTransport.isRunning())) {
+            return ErrorCode::NoError;
+        }
+        disconnectFromHost();
+        const auto fail = [this](ErrorCode code) {
+            emit managementStageChanged(tr("SSH connection failed (error %1).").arg(static_cast<int>(code)));
+            disconnectFromHost();
+            return code;
+        };
+        const QList<int> interfaces = viaXray ? SshManagementTransport::uplinkCandidates() : QList<int> { 0 };
+        ErrorCode lastError = ErrorCode::SshManagementTransportError;
+        bool connected = false;
+        for (int interfaceIndex : interfaces) {
+            disconnectFromHost();
+            emit managementStageChanged(viaXray ? tr("Starting Reality management transport…") : tr("Connecting to SSH…"));
+            if (viaXray && !m_managementTransport.start(credentials, interfaceIndex)) {
+                lastError = ErrorCode::SshManagementTransportError;
+                continue;
+            }
             m_session = ssh_new();
-
-            if (m_session == nullptr) {
-                qDebug() << "Failed to create ssh session";
-                return ErrorCode::InternalError;
+            if (!m_session) {
+                return fail(ErrorCode::InternalError);
             }
-
-            int port = credentials.port;
-            int logVerbosity = SSH_LOG_NOLOG;
-            std::string hostIp = credentials.hostName.toStdString();
-            std::string hostUsername = credentials.userName.toStdString() + "@" + hostIp;
-
-            ssh_options_set(m_session, SSH_OPTIONS_HOST, hostIp.c_str());
-            ssh_options_set(m_session, SSH_OPTIONS_PORT, &port);
-            ssh_options_set(m_session, SSH_OPTIONS_USER, hostUsername.c_str());
-            ssh_options_set(m_session, SSH_OPTIONS_LOG_VERBOSITY, &logVerbosity);
-
+            int port = viaXray ? m_managementTransport.localPort() : credentials.port;
+            const auto host = (viaXray ? QStringLiteral("127.0.0.1") : credentials.hostName).toStdString();
+            const auto username = credentials.userName.toStdString();
+            int verbosity = SSH_LOG_NOLOG;
+            long timeout = 12;
+            if (ssh_options_set(m_session, SSH_OPTIONS_HOST, host.c_str()) != SSH_OK
+                || ssh_options_set(m_session, SSH_OPTIONS_PORT, &port) != SSH_OK
+                || ssh_options_set(m_session, SSH_OPTIONS_USER, username.c_str()) != SSH_OK
+                || ssh_options_set(m_session, SSH_OPTIONS_LOG_VERBOSITY, &verbosity) != SSH_OK
+                || ssh_options_set(m_session, SSH_OPTIONS_TIMEOUT, &timeout) != SSH_OK) {
+                return fail(ErrorCode::SshInternalError);
+            }
             QFutureWatcher<int> watcher;
-            QFuture<int> future = QtConcurrent::run([this]() {
-                return ssh_connect(m_session);
-            });
-
             QEventLoop wait;
-            connect(&watcher, &QFutureWatcher<ErrorCode>::finished, &wait, &QEventLoop::quit);
-            watcher.setFuture(future);
+            connect(&watcher, &QFutureWatcher<int>::finished, &wait, &QEventLoop::quit);
+            watcher.setFuture(QtConcurrent::run([this] { return ssh_connect(m_session); }));
             wait.exec(QEventLoop::ExcludeUserInputEvents);
+            if (watcher.result() != SSH_OK) {
+                lastError = fromLibsshErrorCode();
+                if (lastError == ErrorCode::NoError) {
+                    lastError = ErrorCode::SshInterruptedError;
+                }
+                continue;
+            }
+            if (viaXray && !m_managementTransport.bindingOk()) {
+                lastError = ErrorCode::SshManagementTransportError;
+                continue;
+            }
+            emit managementStageChanged(tr("SSH transport reached; verifying host key…"));
+            const auto keyError = verifyHostKey(credentials);
+            if (keyError != ErrorCode::NoError) {
+                return fail(keyError);
+            }
+            connected = true;
+            break;
+        }
+        if (!connected) {
+            return fail(lastError);
+        }
+        std::string authUsername = credentials.userName.toStdString();
+        emit managementStageChanged(tr("SSH host key verified; authenticating…"));
 
-            int connectionResult = watcher.result();
-
-            if (connectionResult != SSH_OK) {
-                return fromLibsshErrorCode();
+        int authResult = SSH_ERROR;
+        if (credentials.secretData.contains("BEGIN") && credentials.secretData.contains("PRIVATE KEY")) {
+            ssh_key privateKey = nullptr;
+            ssh_key publicKey = nullptr;
+            authResult = ssh_pki_import_privkey_base64(credentials.secretData.toStdString().c_str(), nullptr, callback,
+                                                       nullptr, &privateKey);
+            if (authResult == SSH_OK) {
+                authResult = ssh_pki_export_privkey_to_pubkey(privateKey, &publicKey);
             }
 
-            std::string authUsername = credentials.userName.toStdString();
+            if (authResult == SSH_OK) {
+                authResult = ssh_userauth_try_publickey(m_session, authUsername.c_str(), publicKey);
+            }
 
-            int authResult = SSH_ERROR;
-            if (credentials.secretData.contains("BEGIN") && credentials.secretData.contains("PRIVATE KEY")) {
-                ssh_key privateKey = nullptr;
-                ssh_key publicKey = nullptr;
-                authResult = ssh_pki_import_privkey_base64(credentials.secretData.toStdString().c_str(), nullptr, callback, nullptr, &privateKey);
-                if (authResult == SSH_OK) {
-                    authResult = ssh_pki_export_privkey_to_pubkey(privateKey, &publicKey);
-                }
+            if (authResult == SSH_OK) {
+                authResult = ssh_userauth_publickey(m_session, authUsername.c_str(), privateKey);
+            }
 
-                if (authResult == SSH_OK) {
-                    authResult = ssh_userauth_try_publickey(m_session, authUsername.c_str(), publicKey);
+            if (publicKey) {
+                ssh_key_free(publicKey);
+            }
+            if (privateKey) {
+                ssh_key_free(privateKey);
+            }
+            if (authResult != SSH_OK) {
+                qCritical() << ssh_get_error(m_session);
+                ErrorCode errorCode = fromLibsshErrorCode();
+                if (errorCode == ErrorCode::NoError) {
+                    errorCode = ErrorCode::SshPrivateKeyFormatError;
                 }
-
-                if (authResult == SSH_OK) {
-                    authResult = ssh_userauth_publickey(m_session, authUsername.c_str(), privateKey);
-                }
-
-                if (publicKey) {
-                    ssh_key_free(publicKey);
-                }
-                if (privateKey) {
-                    ssh_key_free(privateKey);
-                }
-                if (authResult != SSH_OK) {
-                    qCritical() << ssh_get_error(m_session);
-                    ErrorCode errorCode = fromLibsshErrorCode();
-                    if (errorCode == ErrorCode::NoError) {
-                        errorCode = ErrorCode::SshPrivateKeyFormatError;
-                    }
-                    return errorCode;
-                }
-            } else {
-                authResult = ssh_userauth_password(m_session, authUsername.c_str(), credentials.secretData.toStdString().c_str());
-                if (authResult != SSH_OK) {
-                    return fromLibsshErrorCode();
-                }
+                return fail(errorCode);
+            }
+        } else {
+            authResult =
+                    ssh_userauth_password(m_session, authUsername.c_str(), credentials.secretData.toStdString().c_str());
+            if (authResult != SSH_OK) {
+                const auto error = fromLibsshErrorCode();
+                return fail(error == ErrorCode::NoError ? ErrorCode::SshRequestDeniedError : error);
             }
         }
+        m_credentialsFingerprint = fingerprint;
+        emit managementStageChanged(tr("SSH authenticated."));
         return ErrorCode::NoError;
     }
 
     void Client::disconnectFromHost()
     {
+        closeScpSession();
         if (m_session != nullptr) {
             if (ssh_is_connected(m_session)) {
                 ssh_disconnect(m_session);
@@ -116,12 +203,19 @@ namespace libssh {
             ssh_free(m_session);
             m_session = nullptr;
         }
+        m_managementTransport.stop();
+        m_credentialsFingerprint.clear();
     }
 
     ErrorCode Client::executeCommand(const QString &data,
                                         const std::function<ErrorCode (const QString &, Client &)> &cbReadStdOut,
                                         const std::function<ErrorCode (const QString &, Client &)> &cbReadStdErr)
     {
+        if (!m_session || m_credentialsFingerprint.isEmpty() || !ssh_is_connected(m_session)
+            || (m_managementTransport.localPort() > 0 && !m_managementTransport.isRunning())) {
+            disconnectFromHost();
+            return ErrorCode::SshInterruptedError;
+        }
         m_channel = ssh_channel_new(m_session);
 
         if (m_channel == nullptr) {
@@ -225,6 +319,10 @@ namespace libssh {
 
     ErrorCode Client::scpFileCopy(const ScpOverwriteMode overwriteMode, const QString& localPath, const QString& remotePath, const QString &fileDesc)
     {
+        Q_UNUSED(overwriteMode)
+        if (!m_session || m_credentialsFingerprint.isEmpty() || !ssh_is_connected(m_session)) {
+            return ErrorCode::SshInterruptedError;
+        }
         m_scpSession = ssh_scp_new(m_session, SSH_SCP_WRITE, remotePath.toStdString().c_str());
 
         if (m_scpSession == nullptr) {
@@ -233,17 +331,19 @@ namespace libssh {
 
         if (ssh_scp_init(m_scpSession) != SSH_OK) {
             auto errorCode = fromLibsshErrorCode();
-            closeScpSession();
+            ssh_scp_free(m_scpSession);
+            m_scpSession = nullptr;
             return errorCode;
         }
 
         QFutureWatcher<ErrorCode> watcher;
         connect(&watcher, &QFutureWatcher<ErrorCode>::finished, this, &Client::scpFileCopyFinished);
-        QFuture<ErrorCode> future = QtConcurrent::run([this, overwriteMode, &localPath, &remotePath, &fileDesc]() {
-            const int accessType = O_WRONLY | O_CREAT | overwriteMode;
+        QFuture<ErrorCode> future = QtConcurrent::run([this, &localPath, &remotePath, &fileDesc]() {
+            const int accessType = 0600;
             const int localFileSize = QFileInfo(localPath).size();
 
-            int result = ssh_scp_push_file(m_scpSession, remotePath.toStdString().c_str(), localFileSize, accessType);
+            const auto fileName = QFileInfo(remotePath).fileName().toStdString();
+            int result = ssh_scp_push_file(m_scpSession, fileName.c_str(), localFileSize, accessType);
             if (result != SSH_OK) {
                 return fromLibsshErrorCode();
             }
@@ -293,6 +393,7 @@ namespace libssh {
     void Client::closeScpSession()
     {
         if (m_scpSession != nullptr) {
+            ssh_scp_close(m_scpSession);
             ssh_scp_free(m_scpSession);
             m_scpSession = nullptr;
         }

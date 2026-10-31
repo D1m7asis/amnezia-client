@@ -81,7 +81,6 @@ ErrorCode SshSession::runScript(const ServerCredentials &credentials, QString sc
             continue;
         }
 
-        qDebug().noquote() << lineToExec;
 
         error = m_sshClient.executeCommand(lineToExec, cbReadStdOut, cbReadStdErr);
         if (error != ErrorCode::NoError) {

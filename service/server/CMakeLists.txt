@@ -45,6 +45,7 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/localserver.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../../common/logger/logger.cpp
     ${CMAKE_CURRENT_LIST_DIR}/main.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/managementXrayRunner.cpp
     ${CMAKE_CURRENT_LIST_DIR}/router.cpp
     ${CMAKE_CURRENT_LIST_DIR}/killswitch.cpp
     ${CMAKE_CURRENT_LIST_DIR}/systemservice.cpp
@@ -288,6 +289,10 @@ include_directories(
 
 
 add_executable(${PROJECT} ${SOURCES} ${HEADERS} ${RESOURCES})
+target_compile_definitions(${PROJECT} PRIVATE CLIENT_KEYCHAIN_NAME_STR=\"${CLIENT_KEYCHAIN_NAME}\")
+if(WIN32)
+    set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME "${CLIENT_SERVICE_NAME}")
+endif()
 target_link_libraries(${PROJECT} PRIVATE Qt6::Core Qt6::Widgets Qt6::Network Qt6::RemoteObjects Qt6::Core5Compat Qt6::DBus Qt6::Concurrent ${LIBS})
 target_compile_definitions(${PROJECT} PRIVATE "MZ_$<UPPER_CASE:${MZ_PLATFORM_NAME}>")
 

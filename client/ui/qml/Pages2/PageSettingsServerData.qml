@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 import SortFilterProxyModel 0.2
 
@@ -48,6 +49,10 @@ PageType {
     Connections {
         target: ServersUiController
 
+        function onSshManagementStatusChanged() {
+            managementDialog.statusText = ServersUiController.sshManagementStatus
+        }
+
         function onProcessedServerIdChanged() {
             root.isServerWithWriteAccess = ServersUiController.isProcessedServerHasWriteAccess()
         }
@@ -84,12 +89,100 @@ PageType {
     }
 
     property list<QtObject> serverActions: [
+        management,
         check,
         reboot,
         remove,
         clear,
         reset,
     ]
+
+    QtObject {
+        id: management
+        property bool isVisible: root.isServerWithWriteAccess
+        readonly property string title: qsTr("SSH management")
+        readonly property string description: qsTr("Direct SSH or an independent Xray Reality transport")
+        readonly property var tColor: AmneziaStyle.color.paleGray
+        readonly property var clickedHandler: function() {
+            const settings = ServersUiController.sshManagementSettings()
+            transport.currentIndex = settings.transport === "xray" ? 1 : 0
+            sshHost.text = settings.targetHost || ""
+            sshPort.text = String(settings.targetPort || 0)
+            hostPin.text = settings.hostKeySha256 || ""
+            managementDialog.profileFile = ""
+            managementDialog.statusText = settings.hasProfile ? qsTr("Reality profile stored securely") : qsTr("No Reality profile imported")
+            managementDialog.open()
+        }
+    }
+
+    FileDialog {
+        id: realityFile
+        options: Qt.platform.os === "windows" && Qt.application.name === "D1m7asisVPN"
+                 ? FileDialog.DontUseNativeDialog : 0
+        title: qsTr("Import Reality client JSON")
+        nameFilters: ["JSON (*.json)"]
+        onAccepted: {
+            managementDialog.profileFile = selectedFile
+            managementDialog.statusText = qsTr("New profile selected; save to apply")
+        }
+    }
+
+    Dialog {
+        id: managementDialog
+        property url profileFile
+        property string statusText
+        title: qsTr("SSH management")
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(root.width - 24, 480)
+        height: Math.min(root.height - 24, 620)
+        standardButtons: Dialog.Close
+        contentItem: ScrollView {
+            clip: true
+            ColumnLayout {
+                width: managementDialog.availableWidth
+                spacing: 10
+                ComboBox {
+                    id: transport
+                    Layout.fillWidth: true
+                    model: [qsTr("Direct SSH"), qsTr("SSH through Xray Reality")]
+                }
+                Label { text: qsTr("SSH destination (empty = server address)"); wrapMode: Text.Wrap; Layout.fillWidth: true }
+                TextField { id: sshHost; Layout.fillWidth: true; selectByMouse: true; enabled: transport.currentIndex === 1 }
+                Label { text: qsTr("SSH port (0 = original port)") }
+                TextField { id: sshPort; Layout.fillWidth: true; enabled: transport.currentIndex === 1; validator: IntValidator { bottom: 0; top: 65535 } }
+                Label { text: qsTr("Trusted SSH fingerprint (SHA256:…)"); wrapMode: Text.Wrap; Layout.fillWidth: true }
+                TextField { id: hostPin; Layout.fillWidth: true; selectByMouse: true }
+                Button {
+                    text: qsTr("Import Reality JSON")
+                    visible: transport.currentIndex === 1
+                    onClicked: realityFile.open()
+                }
+                Label { text: managementDialog.statusText; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                Button {
+                    text: qsTr("Save")
+                    enabled: sshPort.acceptableInput
+                    onClicked: {
+                        if (ServersUiController.saveSshManagement(transport.currentIndex === 1 ? "xray" : "direct",
+                                sshHost.text, Number(sshPort.text), hostPin.text, managementDialog.profileFile)) {
+                            managementDialog.profileFile = ""
+                            managementDialog.statusText = qsTr("Settings saved. Run SSH verification.")
+                        }
+                    }
+                }
+                Button {
+                    text: qsTr("Verify saved SSH settings")
+                    onClicked: {
+                        enabled = false
+                        PageController.showBusyIndicator(true)
+                        managementDialog.statusText = ServersUiController.testSshManagement()
+                        PageController.showBusyIndicator(false)
+                        enabled = true
+                    }
+                }
+            }
+        }
+    }
 
     QtObject {
         id: check

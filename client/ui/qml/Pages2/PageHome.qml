@@ -164,6 +164,25 @@ PageType {
                 Layout.alignment: Qt.AlignCenter
             }
 
+            Label {
+                Layout.fillWidth: true
+                Layout.leftMargin: 16
+                Layout.rightMargin: 16
+                visible: ConnectionController.isConnected
+                text: NetworkReachabilityController.vpnInternetStatus
+                color: AmneziaStyle.color.paleGray
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            BasicButtonType {
+                Layout.alignment: Qt.AlignHCenter
+                visible: ConnectionController.isConnected
+                enabled: !NetworkReachabilityController.checkingVpnInternet
+                text: qsTr("Verify internet")
+                clickedFunc: function() { NetworkReachabilityController.verifyVpnInternet() }
+            }
+
             BasicButtonType {
                 id: splitTunnelingButton
                 objectName: "splitTunnelingButton"

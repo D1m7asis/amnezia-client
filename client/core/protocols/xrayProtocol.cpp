@@ -7,6 +7,7 @@
 #include "core/utils/networkUtilities.h"
 #include "core/utils/serialization/serialization.h"
 #include "ipc.h"
+#include "version.h"
 
 #include <QCryptographicHash>
 #include <QJsonDocument>
@@ -22,7 +23,11 @@
 #ifdef Q_OS_MACOS
 static const QString tunName = "utun22";
 #else
+#if D1MISVPN_WINDOWS_FORK
+static const QString tunName = "d1misxray";
+#else
 static const QString tunName = "tun2";
+#endif
 #endif
 
 XrayProtocol::XrayProtocol(const QJsonObject &configuration, QObject *parent) : VpnProtocol(configuration, parent)
@@ -188,7 +193,7 @@ ErrorCode XrayProtocol::startTun2Socks()
 
                 const QString line = readAllStandardError.returnValue();
 
-                if (!line.contains("[TCP]") && !line.contains("[UDP]"))
+                if (!line.contains("[TCP]") && !line.contains("[UDP]") && !line.contains("socks5://"))
                     qDebug() << "[tun2socks]:" << line;
 
                 if (line.contains("[STACK] tun://") && line.contains("<-> socks5://")) {

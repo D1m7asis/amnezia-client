@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(PROJECT AmneziaVPN)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/windowsFork.cmake)
 if(NOT AMNEZIAVPN_VERSION)
     set(AMNEZIAVPN_VERSION 5.0.3.0 CACHE STRING "Client app version")
 endif()

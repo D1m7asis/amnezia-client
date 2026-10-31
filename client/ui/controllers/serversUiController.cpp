@@ -1,5 +1,11 @@
 #include "serversUiController.h"
 
+#include <QFile>
+#include <QJsonDocument>
+#include <QUrl>
+
+#include "core/utils/selfhosted/sshClient.h"
+
 #include "core/utils/api/apiUtils.h"
 #include "core/utils/containerEnum.h"
 #include "core/utils/containers/containerUtils.h"
@@ -54,6 +60,80 @@ ServersUiController::ServersUiController(ServersController* serversController,
       m_containersModel(containersModel),
       m_defaultServerContainersModel(defaultServerContainersModel)
 {
+}
+
+QJsonObject ServersUiController::sshManagementSettings() const
+{
+    const auto server = m_serversController->selfHostedAdminConfig(m_processedServerId);
+    if (!server) {
+        return {};
+    }
+    const auto &config = server->sshManagement;
+    return {{QStringLiteral("transport"), config.transport},
+            {QStringLiteral("targetHost"), config.targetHost},
+            {QStringLiteral("targetPort"), config.targetPort},
+            {QStringLiteral("hostKeySha256"), config.hostKeySha256},
+            {QStringLiteral("hasProfile"), !config.xrayConfig.isEmpty()}};
+}
+
+bool ServersUiController::saveSshManagement(const QString &transport, const QString &host, int port,
+                                            const QString &fingerprint, const QUrl &profileFile)
+{
+    const auto server = m_serversController->selfHostedAdminConfig(m_processedServerId);
+    if (!server) {
+        return false;
+    }
+    auto config = server->sshManagement;
+    config.transport = transport;
+    config.targetHost = host.trimmed();
+    config.targetPort = port;
+    config.hostKeySha256 = fingerprint.trimmed();
+    if (!profileFile.isEmpty()) {
+        QFile file(profileFile.toLocalFile());
+        if (!profileFile.isLocalFile() || !file.open(QIODevice::ReadOnly) || file.size() > 1024 * 1024) {
+            emit errorOccurred(tr("Cannot read the local Reality JSON profile (maximum 1 MiB)."));
+            return false;
+        }
+        QJsonParseError error;
+        const auto document = QJsonDocument::fromJson(file.readAll(), &error);
+        if (error.error != QJsonParseError::NoError || !document.isObject()) {
+            emit errorOccurred(tr("Invalid Reality JSON profile."));
+            return false;
+        }
+        config.xrayConfig = document.object();
+    }
+    if (!m_serversController->setSshManagement(m_processedServerId, config)) {
+        emit errorOccurred(tr("Invalid SSH management settings. Reality requires a profile and a trusted SHA256 fingerprint."));
+        return false;
+    }
+    emit finished(tr("SSH management settings saved."));
+    return true;
+}
+
+QString ServersUiController::testSshManagement()
+{
+    if (!m_serversController->selfHostedAdminConfig(m_processedServerId)) {
+        return tr("An administrator profile is required.");
+    }
+    libssh::Client client;
+    connect(&client, &libssh::Client::managementStageChanged, this, [this](const QString &stage) {
+        m_sshManagementStatus = stage;
+        emit sshManagementStatusChanged();
+    });
+    auto result = client.connectToHost(m_serversController->getServerCredentials(m_processedServerId));
+    if (result == ErrorCode::NoError) {
+        QString output;
+        result = client.executeCommand(QStringLiteral("printf d1mis-ssh-ok"),
+            [&output](const QString &data, libssh::Client &) { output += data; return ErrorCode::NoError; },
+            [](const QString &, libssh::Client &) { return ErrorCode::SshInternalError; });
+        if (result == ErrorCode::NoError && output.trimmed() == QLatin1String("d1mis-ssh-ok")) {
+            return tr("SSH verified: trusted host key, authentication and command succeeded.");
+        }
+        if (result == ErrorCode::NoError) {
+            result = ErrorCode::SshInternalError;
+        }
+    }
+    return tr("SSH verification failed (error %1). Check transport, host fingerprint and credentials.").arg(static_cast<int>(result));
 }
 
 void ServersUiController::removeServer(const QString &serverId)

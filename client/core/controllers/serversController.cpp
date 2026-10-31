@@ -83,6 +83,17 @@ bool ServersController::renameServer(const QString &serverId, const QString &nam
     }
 }
 
+bool ServersController::setSshManagement(const QString &serverId, const SshManagementConfig &config)
+{
+    auto server = m_serversRepository->selfHostedAdminConfig(serverId);
+    if (!server || !config.isValid()) {
+        return false;
+    }
+    server->sshManagement = config;
+    m_serversRepository->editServer(serverId, server->toJson(), serverConfigUtils::ConfigType::SelfHostedAdmin);
+    return true;
+}
+
 void ServersController::removeServer(const QString &serverId)
 {
     m_serversRepository->removeServer(serverId);

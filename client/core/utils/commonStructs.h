@@ -3,6 +3,7 @@
 
 #include <QString>
 #include "core/utils/routeModes.h"
+#include "core/models/selfhosted/sshManagementConfig.h"
 
 namespace amnezia
 {
@@ -12,10 +13,12 @@ namespace amnezia
         QString userName;
         QString secretData;
         int port = 22;
+        SshManagementConfig sshManagement;
 
         bool isValid() const
         {
-            return !hostName.isEmpty() && !userName.isEmpty() && !secretData.isEmpty() && port > 0;
+            return !hostName.isEmpty() && !userName.isEmpty() && !secretData.isEmpty() && port > 0
+                    && sshManagement.isValid();
         }
     };
 
