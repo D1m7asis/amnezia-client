@@ -46,7 +46,10 @@ The Windows fork has separate settings, keychain, IPC, service and adapter names
 firewall identifiers and installer identity. Its updater does not install official
 Amnezia builds. The signed split-tunnel driver remains shared; the fork does not
 restart a busy driver and initializes it only for application split tunneling.
-Installer and real network acceptance remain pending.
+The installed `5.0.3.101` client passed manual Xray connection and reconnect
+checks. AmneziaWG worked with a temporary endpoint route, but inspection found
+that its separate legacy control pipe still collided with the official client.
+Those results do not establish acceptance of the corrected `5.0.3.102` build.
 
 The `test_ssh_management` executable checks legacy compatibility, preservation
 of the public endpoint, administrator/guest boundaries, mandatory host pins,
@@ -67,7 +70,7 @@ containing authenticated SOCKS URLs are omitted from logs.
 ## Build and acceptance
 
 Baseline: upstream tag `5.0.3.0`, Windows x64, VS 2022, Qt 6.10.1 and the existing
-Conan dependencies. The Windows fork currently uses version `5.0.3.101` and display
+Conan dependencies. The Windows fork currently uses version `5.0.3.102` and display
 name `D1m7asis VPN`. No signing certificate is included. Guest profiles and release
 artifacts must not contain administrator credentials or personal Reality profiles.
 
@@ -83,6 +86,23 @@ IPv6 protection uses the Windows IP Helper API: an existing loopback route is
 accepted without taking ownership, and disconnect removes only routes created by
 this service. This avoids failing a connection when another client left the same
 IPv6 protection routes behind. Xray setup no longer logs VLESS client identifiers.
+
+Version `5.0.3.102` gives both ends of the Windows WireGuard control channel their
+own `d1m7asisvpn-wg` named pipe. The fork must not use the official service as a
+fallback. Endpoint exclusion failures now abort peer activation rather than
+silently routing encrypted WireGuard traffic through its own tunnel. Route
+capture registers exclusions before cloning other routes, treats an absent IPv6
+endpoint as optional, and checks routing-table reads before using the result.
+WireGuard address allocation selects a free host inside the configured subnet;
+a full or invalid subnet fails before adding a peer. Existing client addresses
+are not rewritten. Local file dialogs receive file URLs made from local paths.
+
+The elevated opt-in `WindowsEndpointRouteTest` creates and removes only a
+`192.0.2.47/32` TEST-NET route. Set `D1MISVPN_TEST_ROUTE_ADMIN=1` and
+`D1MISVPN_TEST_EXCLUDE_INTERFACE` to the current VPN interface index. The test
+refuses to overwrite an existing test route. General CTest runs skip this test's
+privileged operation. Acceptance still requires the installed fork's own WG
+adapter and daemon, without the temporary manual endpoint route.
 
 ### Rebuilding
 

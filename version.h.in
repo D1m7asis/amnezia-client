@@ -17,4 +17,10 @@
 #define IPC_SERVICE_URL         "local:@CLIENT_IPC_NAME@"
 #cmakedefine01 D1MISVPN_WINDOWS_FORK
 
+#if D1MISVPN_WINDOWS_FORK
+#define WG_DAEMON_PIPE_NAME "\\\\.\\pipe\\d1m7asisvpn-wg"
+#else
+#define WG_DAEMON_PIPE_NAME "\\\\.\\pipe\\amneziavpn"
+#endif
+
 #endif  // VERSION_H

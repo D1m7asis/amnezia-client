@@ -1,7 +1,7 @@
 if(CMAKE_HOST_WIN32 AND (NOT CMAKE_SYSTEM_NAME OR CMAKE_SYSTEM_NAME STREQUAL "Windows"))
     option(D1MISVPN_WINDOWS_FORK "Build the isolated D1m7asis Windows client" ON)
     if(D1MISVPN_WINDOWS_FORK)
-        set(AMNEZIAVPN_VERSION "5.0.3.101")
+        set(AMNEZIAVPN_VERSION "5.0.3.102")
         set(CLIENT_APPLICATION_NAME "D1m7asisVPN")
         set(CLIENT_DISPLAY_NAME "D1m7asis VPN")
         set(CLIENT_SERVICE_NAME "D1m7asisVPN-service")

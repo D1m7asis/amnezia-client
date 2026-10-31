@@ -42,7 +42,7 @@ class WindowsRouteMonitor final : public QObject {
   static QHostAddress prefixToAddress(const IP_ADDRESS_PREFIX* dest);
 
   void flushRouteTable(QHash<IPAddress, MIB_IPFORWARD_ROW2*>& table);
-  void updateExclusionRoute(MIB_IPFORWARD_ROW2* data, void* table);
+  bool updateExclusionRoute(MIB_IPFORWARD_ROW2 *data, void *table);
   void updateInterfaceMetrics(int family);
   void updateCapturedRoutes(int family);
   void updateCapturedRoutes(int family, void* table);

@@ -42,6 +42,17 @@ target_include_directories(test_common PUBLIC
 )
 
 if(NOT ANDROID)
+    add_executable(test_wireguard_address_allocation testWireguardAddressAllocation.cpp)
+    target_link_libraries(test_wireguard_address_allocation PRIVATE Qt6::Test test_common)
+    add_test(NAME WireguardAddressAllocationTest COMMAND test_wireguard_address_allocation)
+    if(WIN32)
+        add_executable(test_windows_endpoint_route testWindowsEndpointRoute.cpp
+            ../platforms/windows/daemon/windowsroutemonitor.cpp
+            ../platforms/windows/daemon/windowsroutemonitor.h)
+        target_link_libraries(test_windows_endpoint_route PRIVATE Qt6::Test test_common iphlpapi ws2_32)
+        target_include_directories(test_windows_endpoint_route PRIVATE ../mozilla/shared)
+        add_test(NAME WindowsEndpointRouteTest COMMAND test_windows_endpoint_route)
+    endif()
     add_executable(test_ssh_management testSshManagement.cpp)
     target_link_libraries(test_ssh_management PRIVATE Qt6::Test test_common)
     add_executable(test_ssh_management_runtime testSshManagementRuntime.cpp)

@@ -11,6 +11,7 @@
 #include "daemonlocalserverconnection.h"
 #include "leakdetector.h"
 #include "logger.h"
+#include "version.h"
 
 #if defined(MZ_MACOS) || defined(MZ_LINUX)
 #  include <sys/stat.h>
@@ -67,7 +68,7 @@ bool DaemonLocalServer::initialize() {
 
 QString DaemonLocalServer::daemonPath() const {
 #if defined(MZ_WINDOWS)
-  return "\\\\.\\pipe\\amneziavpn";
+    return QString::fromLatin1(WG_DAEMON_PIPE_NAME);
 #endif
 #if defined(MZ_MACOS) || defined(MZ_LINUX)
   QDir dir("/var/run");

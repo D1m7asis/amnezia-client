@@ -142,7 +142,7 @@ QString SystemController::getFileName(const QString &acceptLabel, const QString 
     mainFileDialog->setProperty("defaultSuffix", QVariant::fromValue(defaultSuffix));
     mainFileDialog->setProperty("isSaveMode", QVariant::fromValue(isSaveMode));
     if (!selectedFile.isEmpty()) {
-        mainFileDialog->setProperty("selectedFile", QVariant::fromValue(QUrl(selectedFile)));
+        mainFileDialog->setProperty("selectedFile", QVariant::fromValue(QUrl::fromLocalFile(selectedFile)));
     }
     QMetaObject::invokeMethod(mainFileDialog, "open");
 

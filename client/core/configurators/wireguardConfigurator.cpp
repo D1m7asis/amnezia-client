@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSet>
 #include <QString>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
@@ -77,9 +78,30 @@ WireguardConfigurator::ConnectionData WireguardConfigurator::genClientKeys()
     return connData;
 }
 
+QHostAddress WireguardConfigurator::nextClientAddress(const QHostAddress &serverAddress, int prefixLength,
+                                                      const QList<QHostAddress> &usedAddresses)
+{
+    if (serverAddress.protocol() != QAbstractSocket::IPv4Protocol || prefixLength < 1 || prefixLength > 30)
+        return {};
+    const quint32 mask = 0xffffffffu << (32 - prefixLength);
+    const quint32 network = serverAddress.toIPv4Address() & mask;
+    const quint32 broadcast = network | ~mask;
+    QSet<quint32> used;
+    used.insert(serverAddress.toIPv4Address());
+    for (const auto &address : usedAddresses) {
+        if (address.protocol() == QAbstractSocket::IPv4Protocol)
+            used.insert(address.toIPv4Address());
+    }
+    for (quint32 candidate = network + 1; candidate < broadcast; ++candidate) {
+        if (!used.contains(candidate))
+            return QHostAddress(candidate);
+    }
+    return {};
+}
+
 QList<QHostAddress> WireguardConfigurator::getIpsFromConf(const QString &input)
 {
-    QRegularExpression regex("AllowedIPs = (\\d+\\.\\d+\\.\\d+\\.\\d+)");
+    QRegularExpression regex("AllowedIPs\\s*=\\s*(\\d+\\.\\d+\\.\\d+\\.\\d+)");
     QRegularExpressionMatchIterator matchIterator = regex.globalMatch(input);
 
     QList<QHostAddress> ips;
@@ -139,28 +161,26 @@ WireguardConfigurator::ConnectionData WireguardConfigurator::prepareWireguardCon
     auto ips = getIpsFromConf(stdOut);
 
     QHostAddress nextIp = [&] {
-        QHostAddress result;
-        QHostAddress lastIp;
         QString subnetAddress = protocols::wireguard::defaultSubnetAddress;
+        QString subnetCidr = protocols::wireguard::defaultSubnetCidr;
         if (serverConfig && !serverConfig->subnetAddress.isEmpty()) {
             subnetAddress = serverConfig->subnetAddress;
         } else if (awgServerConfig && !awgServerConfig->subnetAddress.isEmpty()) {
             subnetAddress = awgServerConfig->subnetAddress;
         }
-        if (ips.empty()) {
-            lastIp.setAddress(subnetAddress);
-        } else {
-            lastIp = ips.last();
+        if (serverConfig && !serverConfig->subnetCidr.isEmpty()) {
+            subnetCidr = serverConfig->subnetCidr;
+        } else if (awgServerConfig && !awgServerConfig->subnetCidr.isEmpty()) {
+            subnetCidr = awgServerConfig->subnetCidr;
         }
-        quint8 lastOctet = static_cast<quint8>(lastIp.toIPv4Address());
-        switch (lastOctet) {
-        case 254: result.setAddress(lastIp.toIPv4Address() + 3); break;
-        case 255: result.setAddress(lastIp.toIPv4Address() + 2); break;
-        default: result.setAddress(lastIp.toIPv4Address() + 1); break;
-        }
-
-        return result;
+        return nextClientAddress(QHostAddress(subnetAddress), subnetCidr.toInt(), ips);
     }();
+
+    if (nextIp.isNull()) {
+        qWarning() << "No available client address in the configured WireGuard subnet";
+        errorCode = ErrorCode::ServerCheckFailed;
+        return connData;
+    }
 
     connData.clientIP = nextIp.toString();
 
