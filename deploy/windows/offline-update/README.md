@@ -22,6 +22,10 @@ The update deliberately interrupts the fork when the user runs it. It never
 switches VPN connections, stops the official Amnezia service, deletes server
 peers, restarts server containers or removes the shared Wintun driver.
 
+After manually selecting one VPN, run `CHECK-CONNECTION.cmd` for a read-only
+DNS/HTTPS/download/exit-IP and route check. An active official tunnel is reported
+explicitly and prevents acceptance even if its exit IP matches the same server.
+
 The legacy `installed102-manifest.json` filename is accepted for existing kits.
 Set `usesScopedCredentials` only for a previous build already using the fork's
 Credential Manager namespace; legacy rollback additionally validates shared keys.

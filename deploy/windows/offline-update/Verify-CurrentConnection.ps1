@@ -2,6 +2,7 @@
 param([string]$ExpectedIp='2.27.29.231')
 $ErrorActionPreference='Stop'
 $checks=[Collections.Generic.List[object]]::new()
+$foreignTunnelActive=@(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object {$_.Name -eq 'AmneziaVPN' -and $_.Status -eq 'Up'}).Count -gt 0
 $route=@(Find-NetRoute -RemoteIPAddress '1.1.1.1' | Select-Object InterfaceAlias,InterfaceIndex,NextHop)
 $endpoint=@(Find-NetRoute -RemoteIPAddress '2.27.29.231' | Select-Object InterfaceAlias,InterfaceIndex,NextHop)
 $services=@(Get-CimInstance Win32_Service | Where-Object Name -in @('D1m7asisVPN-service','AmneziaVPN-service') | Select-Object Name,State,ProcessId)
@@ -17,7 +18,7 @@ foreach($test in @(@{name='example';url='https://example.com';code=200;bytes=1},
  $checks.Add([pscustomobject]@{name=$test.name;passed=$ok;status=$parts[0];bytes=$parts[1];seconds=$parts[2]})
 }
 $ownedRoute=@($route | Where-Object InterfaceAlias -in @('D1m7asisVPN','d1misxray')).Count -gt 0
-$facts=[ordered]@{timeUtc=[datetime]::UtcNow.ToString('o');passed=($ipOk -and $dns -and $ownedRoute -and @($checks | Where-Object {-not $_.passed}).Count -eq 0);exitIp="$ip".Trim();dns=$dns;route=$route;endpointRoute=$endpoint;services=$services;checks=@($checks);networkChanged=$false}
+$facts=[ordered]@{timeUtc=[datetime]::UtcNow.ToString('o');passed=($ipOk -and $dns -and $ownedRoute -and -not $foreignTunnelActive -and @($checks | Where-Object {-not $_.passed}).Count -eq 0);foreignTunnelActive=$foreignTunnelActive;ownTunnelObserved=$ownedRoute;exitIp="$ip".Trim();dns=$dns;route=$route;endpointRoute=$endpoint;services=$services;checks=@($checks);networkChanged=$false}
 $folder=Join-Path $env:LOCALAPPDATA 'D1m7asisVPN-Diagnostics'
 New-Item -ItemType Directory -Path $folder -Force | Out-Null
 $report=Join-Path $folder ('connection-'+[datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')+'.json')

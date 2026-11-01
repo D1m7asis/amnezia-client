@@ -22,12 +22,12 @@ inline bool isActiveOfficialTunnel(const QString &alias, QNetworkInterface::Inte
 
 inline bool hasActiveOfficialTunnel()
 {
-    for (const auto &interface : QNetworkInterface::allInterfaces()) {
+    for (const auto &adapter : QNetworkInterface::allInterfaces()) {
         QList<QHostAddress> addresses;
-        for (const auto &entry : interface.addressEntries()) {
+        for (const auto &entry : adapter.addressEntries()) {
             addresses.append(entry.ip());
         }
-        if (isActiveOfficialTunnel(interface.humanReadableName(), interface.flags(), addresses)) {
+        if (isActiveOfficialTunnel(adapter.humanReadableName(), adapter.flags(), addresses)) {
             return true;
         }
     }

@@ -1,4 +1,5 @@
 #include <QtTest>
+#include <windows.h>
 #include "core/utils/windowsVpnConflict.h"
 
 class WindowsVpnConflictTest : public QObject {
