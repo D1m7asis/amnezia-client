@@ -185,6 +185,10 @@ configuration with Windows 5010. The official `AmneziaVPN` interface was active
 with the same `10.8.1.6/32` address. Xray could start but the browser reported
 `ERR_NETWORK_ACCESS_DENIED`; overlapping VPN filtering is suspected, not proven
 by a WFP capture (enumeration requires elevation).
+Read-only checks on 2026-11-01 additionally found the official tunnel process
+running continuously since 16:26:55 Kaliningrad, before the 16:42-16:48 failures,
+and its `Conf/killSwitchEnabled` set to true. Its current exit IP is the same
+server, `2.27.29.231`; server reachability alone is therefore not fork acceptance.
 
 The fork now rejects a WG or Xray start while an active official `AmneziaVPN`
 interface has a usable IPv4 address. Error 107 explains manual disconnection.
