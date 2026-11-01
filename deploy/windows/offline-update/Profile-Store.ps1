@@ -78,7 +78,7 @@ function New-VpnProfileBlob([object[]]$Profiles,[byte[]]$Material) {
  $aes=[Security.Cryptography.Aes]::Create()
  try{$aes.Key=[byte[]]$Material[0..31];$aes.IV=[byte[]]$Material[32..47];$e=$aes.CreateEncryptor();try{$cipher=$e.TransformFinalBlock($plain,0,$plain.Length)}finally{$e.Dispose()}}finally{$aes.Dispose();[Array]::Clear($plain,0,$plain.Length)}
  $encoded=[Text.Encoding]::GetEncoding(28591).GetString([byte[]]([Text.Encoding]::ASCII.GetBytes('EncData')+$cipher))
- return ,([Text.Encoding]::Unicode.GetBytes('@ByteArray('+$encoded+')'+[char]0))
+ return ,([Text.Encoding]::Unicode.GetBytes('@ByteArray('+$encoded+')'))
 }
 function Update-VpnProfileLayout([switch]$ValidateOnly) {
  $material=Get-VpnKeyMaterial

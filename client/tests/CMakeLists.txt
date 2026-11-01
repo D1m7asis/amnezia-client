@@ -56,6 +56,14 @@ if(NOT ANDROID)
                     -NoProfile -ExecutionPolicy Bypass -File
                     "${CMAKE_SOURCE_DIR}/deploy/windows/offline-update/tests/Test-${_offline_test}.ps1")
         endforeach()
+        add_executable(test_profile_codec testProfileCodec.cpp ../../common/crypto/cryptoUtils.cpp)
+        target_include_directories(test_profile_codec PRIVATE ../../common/crypto)
+        target_link_libraries(test_profile_codec PRIVATE Qt6::Core OpenSSL::Crypto)
+        add_test(NAME OfflineUpdateQtCodecTest
+            COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+                -NoProfile -ExecutionPolicy Bypass -File
+                "${CMAKE_SOURCE_DIR}/deploy/windows/offline-update/tests/Test-QtCodec.ps1"
+                -Probe $<TARGET_FILE:test_profile_codec>)
         if(D1MISVPN_WINDOWS_FORK)
             add_executable(test_secure_settings_isolation testSecureSettingsIsolation.cpp)
             target_link_libraries(test_secure_settings_isolation PRIVATE Qt6::Test test_common advapi32)

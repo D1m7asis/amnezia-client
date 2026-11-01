@@ -22,7 +22,9 @@ The update deliberately interrupts the fork when the user runs it. It never
 switches VPN connections, stops the official Amnezia service, deletes server
 peers, restarts server containers or removes the shared Wintun driver.
 
-Run the five `tests/Test-*.ps1` files using Windows PowerShell 5.1. They use
+Run the five standalone `tests/Test-*.ps1` files using Windows PowerShell 5.1.
+The additional `Test-QtCodec.ps1` requires the built `test_profile_codec` probe
+through its `-Probe` argument and checks the real PowerShell-to-Qt storage format. They use
 synthetic profiles, isolated UUID registry keys and mocked system operations.
 CTest registers them on Windows. These checks do not prove a real installation
 or a working VPN; those are separate user-controlled acceptance steps.
