@@ -10,7 +10,7 @@ installed application and service against known manifests, saves a CurrentUser
 DPAPI snapshot, closes only exact owned processes, removes only identified own
 stale Xray devices, installs and verifies the binaries, and migrates the obsolete
 local WG container out of the Reality profile. The standalone working WG and
-Xray/SSH settings remain intact. The GUI opens without connection arguments.
+Xray/SSH settings remain intact. The updater does not launch the GUI; the user opens the client and connects manually.
 
 `ROLLBACK.cmd` uses the complete local 102 installer and the pre-update profile
 snapshot, including after a failed install removed the installation directory.

@@ -150,7 +150,8 @@ The updater removes stale own Xray device instances only after stopping exact
 owned processes and validating adapter GUID, Wintun device ID and service.
 It never removes the shared Wintun driver.
 
-Installation, VPN switching, outage tests and reboot remain user-controlled.
+The updater does not launch the GUI or auto-connect. Installation, VPN switching,
+outage tests and reboot remain user-controlled.
 Build/unit/mock checks do not establish installed-network acceptance. After
 installation verify both profiles, restart persistence, WG and Xray DNS/HTTPS/IP,
 and pinned SSH through Reality. Installer payloads contain no personal profiles;

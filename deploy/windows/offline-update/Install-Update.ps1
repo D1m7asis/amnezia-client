@@ -1,11 +1,10 @@
-param([switch]$Rollback)
+﻿param([switch]$Rollback)
 $ErrorActionPreference='Stop'
 $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
 if(-not ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
  $arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$PSCommandPath+'"'
  if($Rollback){$arguments+=' -Rollback'}
  $p=Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList $arguments -Verb RunAs -Wait -PassThru
- if($p.ExitCode -eq 0){Start-Process -FilePath 'C:\Program Files\D1m7asisVPN\D1m7asisVPN.exe'}
  exit $p.ExitCode
 }
 $mutex=[Threading.Mutex]::new($false,'Local\D1m7asisVPN-OfflineUpdate')
@@ -15,7 +14,7 @@ try {
  if(-not $locked){throw 'Another VPN update is already running'}
  Write-Host 'This offline operation stops only D1m7asis VPN. Connect VPN manually after completion.'
  & (Join-Path $PSScriptRoot 'Upgrade.ps1') -Rollback:$Rollback
- Write-Host 'SUCCESS. Verified profiles and binaries. Connect manually.' -ForegroundColor Green
+ Write-Host 'SUCCESS. Verified profiles and binaries. Open the client and connect manually.' -ForegroundColor Green
  $exitCode=0
  Start-Sleep -Seconds 3
 }catch{
