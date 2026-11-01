@@ -4,6 +4,7 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Profile-Store.ps1')
 . (Join-Path $PSScriptRoot 'Stop-OwnedVpn.ps1')
 . (Join-Path $PSScriptRoot 'Remove-OwnedXrayAdapters.ps1')
+. (Join-Path $PSScriptRoot 'Update-OwnedHelper.ps1')
 $root='C:\Program Files\D1m7asisVPN'
 $old=Get-Content (Join-Path $PSScriptRoot 'installed102-manifest.json') -Raw | ConvertFrom-Json
 $new=Get-Content (Join-Path $PSScriptRoot 'release-manifest.json') -Raw | ConvertFrom-Json
@@ -42,6 +43,11 @@ if($Rollback){
 }
 
 if($state.Count -lt 1){throw 'No readable profiles; update cancelled without stopping VPN'}
+if(-not $Rollback -and $new.helperRevision){
+ $helperPayload=Join-Path $PSScriptRoot 'helper-update\tun2socks.exe'
+ if((Get-FileHash -LiteralPath $helperPayload).Hash -ine $new.tun2socksSha256){throw 'Helper payload checksum mismatch'}
+ if($current.appSha256 -eq $new.appSha256 -and (Get-FileHash -LiteralPath (Join-Path $root 'tun2socks.exe')).Hash -notin @($new.tun2socksSha256,$new.previousTun2socksSha256)){throw 'Unknown installed helper; update cancelled without stopping VPN'}
+}
 if($ValidateOnly){
  $layout=if($hasCurrentProfiles){Update-VpnProfileLayout -ValidateOnly}else{$null}
  [pscustomobject]@{PreflightPassed=$true;ProfileCount=$state.Count;Layout=$layout;NoProcessesStopped=$true}
@@ -100,6 +106,7 @@ try {
  if(-not (Test-Path -LiteralPath $root)){
   & (Join-Path $PSScriptRoot 'Install-VerifiedFork.ps1') -Installer $installer -InstallerSha256 $target.installerSha256
  }else{
+  if(-not $Rollback -and $new.helperRevision){Update-OwnedHelper -Root $root -Payload $helperPayload -Backup $backup -ExpectedHash $new.tun2socksSha256 -PreviousHash $new.previousTun2socksSha256}
   & sc.exe failure D1m7asisVPN-service reset= 100 actions= restart/2000/restart/2000/restart/2000 | Out-Null
   if($LASTEXITCODE){throw 'Cannot restore owned service recovery'}
   Start-Service D1m7asisVPN-service
@@ -114,6 +121,7 @@ try {
  $after=Get-VpnProfileState
  $facts.ProfilesPreserved=$after.Count -eq $state.Count
  $facts.BinariesVerified=(Get-FileHash (Join-Path $root 'D1m7asisVPN.exe')).Hash -eq $target.appSha256 -and (Get-FileHash (Join-Path $root 'D1m7asisVPN-service.exe')).Hash -eq $target.serviceSha256
+ if(-not $Rollback -and $new.helperRevision){$facts.HelperVerified=(Get-FileHash -LiteralPath (Join-Path $root 'tun2socks.exe')).Hash -eq $new.tun2socksSha256;$facts.BinariesVerified=$facts.BinariesVerified -and $facts.HelperVerified}
  $officialAfter=Get-CimInstance Win32_Service -Filter "Name='AmneziaVPN-service'"
  $facts.OfficialPreserved=$officialAfter.ProcessId -eq $official.ProcessId -and $officialAfter.State -eq $official.State -and (Get-FileHash 'C:\Program Files\AmneziaVPN\AmneziaVPN.exe').Hash -eq $officialHash
  $facts.Success=$facts.ProfilesPreserved -and $facts.BinariesVerified -and $facts.OfficialPreserved

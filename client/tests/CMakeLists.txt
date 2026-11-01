@@ -50,7 +50,7 @@ if(NOT ANDROID)
     target_link_libraries(test_wireguard_address_allocation PRIVATE Qt6::Test test_common)
     add_test(NAME WireguardAddressAllocationTest COMMAND test_wireguard_address_allocation)
     if(WIN32)
-        foreach(_offline_test Profiles UpgradeFlow Devices ProcessIdentity StopOwned)
+        foreach(_offline_test Profiles UpgradeFlow Devices ProcessIdentity StopOwned HelperUpdate)
             add_test(NAME OfflineUpdate${_offline_test}Test
                 COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
                     -NoProfile -ExecutionPolicy Bypass -File

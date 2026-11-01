@@ -34,6 +34,7 @@ function Get-FileHash {param($LiteralPath,$Path)
  elseif($p -like '*AmneziaVPN\AmneziaVPN.exe'){'1'*64}
  elseif($p -like '*D1m7asisVPN-service.exe'){if($f.Version -eq 'old'){'B'*64}else{'F'*64}}
  elseif($p -like '*D1m7asisVPN.exe'){if($f.Version -eq 'old'){'A'*64}else{'E'*64}}
+ elseif($p -like '*tun2socks.exe'){$f.HelperHash}
  else{throw 'Unexpected hash target in mocked flow'}
  [pscustomobject]@{Hash=$hash}
 }
@@ -78,18 +79,25 @@ $global:Offline103Fixture.Version=if($Installer -like '*102*'){'old'}else{'new'}
 '@
 $passes=0
 try{
- foreach($mode in @('dry','upgrade','rollback','install-failure','rollback-missing-profiles','rollback-partial-folder','rollback-incompatible-keys')){
+ foreach($mode in @('dry','upgrade','rollback','install-failure','rollback-missing-profiles','rollback-partial-folder','rollback-incompatible-keys','helper-repair')){
   $dir=Join-Path $testRoot $mode
   New-Item -ItemType Directory -Path $dir | Out-Null
   $global:Offline103Fixture=@{Installed=($mode -ne 'rollback-missing-profiles');Version='old';Hash='base';Missing=($mode -eq 'rollback-missing-profiles');Stops=0;FailInstall=($mode -eq 'install-failure');Partial=($mode -eq 'rollback-partial-folder');Quarantined=$false;Incompatible=($mode -eq 'rollback-incompatible-keys')}
   if($mode -in @('rollback','rollback-incompatible-keys')){$global:Offline103Fixture.Version='new';$global:Offline103Fixture.Hash='migrated'}
+  $global:Offline103Fixture.HelperHash='2'*64
+  if($mode -eq 'helper-repair'){$global:Offline103Fixture.Version='new'}
   [IO.File]::WriteAllText((Join-Path $dir 'Upgrade.ps1'),$source)
+  Copy-Item -LiteralPath (Join-Path $kit 'Update-OwnedHelper.ps1') -Destination $dir
   [IO.File]::WriteAllText((Join-Path $dir 'Profile-Store.ps1'),$profileStub)
   [IO.File]::WriteAllText((Join-Path $dir 'Stop-OwnedVpn.ps1'),$stopStub)
   [IO.File]::WriteAllText((Join-Path $dir 'Install-VerifiedFork.ps1'),$installStub)
   [IO.File]::WriteAllText((Join-Path $dir 'Remove-OwnedXrayAdapters.ps1'),'function Remove-OwnedXrayAdapters {return 2}')
   @{installer='D1m7asisVPN_5.0.3.102_windows_x64.exe';installerSha256=('C'*64);appSha256=('A'*64);serviceSha256=('B'*64)}|ConvertTo-Json|Set-Content (Join-Path $dir 'installed102-manifest.json')
   @{installer='D1m7asisVPN_5.0.3.103_windows_x64.exe';installerSha256=('D'*64);appSha256=('E'*64);serviceSha256=('F'*64)}|ConvertTo-Json|Set-Content (Join-Path $dir 'release-manifest.json')
+  if($mode -eq 'helper-repair'){
+   @{installer='D1m7asisVPN_5.0.3.103_windows_x64.exe';installerSha256=('D'*64);appSha256=('E'*64);serviceSha256=('F'*64);helperRevision=1;tun2socksSha256=('2'*64);previousTun2socksSha256=('3'*64)}|ConvertTo-Json|Set-Content (Join-Path $dir 'release-manifest.json')
+   [IO.File]::WriteAllText((Join-Path $dir 'Update-OwnedHelper.ps1'),'function Update-OwnedHelper {param($Root,$Payload,$Backup,$ExpectedHash,$PreviousHash) if($global:Offline103Fixture.Stops -ne 1){throw "Helper updated before owned stop"};$global:Offline103Fixture.HelperUpdated=$true}')
+  }
   $rollback=$mode -like 'rollback*'
   if($rollback){
    $recovery=Join-Path $dir 'live-private\fixture-backup';New-Item -ItemType Directory -Path $recovery -Force|Out-Null
@@ -111,6 +119,7 @@ try{
    $expected=if($rollback){'old'}else{'new'}
    if($global:Offline103Fixture.Version -ne $expected){throw 'Wrong mock version after operation'}
    if($mode -eq 'rollback-partial-folder' -and -not $global:Offline103Fixture.Quarantined){throw 'Partial installation was not quarantined'}
+   if($mode -eq 'helper-repair' -and (-not $global:Offline103Fixture.HelperUpdated -or -not $report.HelperVerified)){throw 'Existing 103 helper repair was not verified'}
   }
   $passes++
  }

@@ -108,7 +108,7 @@ class Tun2Socks(ConanFile):
     var err error
     if ifname == "d1misxray" {
         wt, err = wintun.OpenAdapter(ifname)
-        if err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+        if err != nil && !ownedAdapterMissing(err) {
             return nil, fmt.Errorf("Error opening owned interface: %w", err)
         }
     }
@@ -117,7 +117,30 @@ class Tun2Socks(ConanFile):
     }"""
                 if source.count(original) != 1:
                     raise ConanInvalidConfiguration("Pinned WireGuard TUN source changed")
-                save(self, target, source.replace(original, patched))
+                source = source.replace(original, patched)
+                source += """
+// Windows reports both missing-file and missing-element when no adapter exists.
+func ownedAdapterMissing(err error) bool {
+    return errors.Is(err, windows.ERROR_FILE_NOT_FOUND) || errors.Is(err, windows.ERROR_NOT_FOUND)
+}
+"""
+                save(self, target, source)
+                save(self, os.path.join(os.path.dirname(target), "owned_adapter_windows_test.go"), """package tun
+import (
+    "fmt"
+    "testing"
+    "golang.org/x/sys/windows"
+)
+func TestOwnedAdapterMissing(t *testing.T) {
+    for _, err := range []error{windows.ERROR_FILE_NOT_FOUND, windows.ERROR_NOT_FOUND, fmt.Errorf("wrapped: %w", windows.ERROR_NOT_FOUND)} {
+        if !ownedAdapterMissing(err) { t.Fatalf("missing adapter not recognized: %v", err) }
+    }
+    for _, err := range []error{windows.ERROR_ACCESS_DENIED, windows.ERROR_INVALID_PARAMETER} {
+        if ownedAdapterMissing(err) { t.Fatalf("real failure incorrectly ignored: %v", err) }
+    }
+}
+""")
+                self.run("go test golang.zx2c4.com/wireguard/tun -run TestOwnedAdapterMissing -count=1 -v")
             for arch in self._archs:
                 build_dir = os.path.join(self.build_folder, arch) if self._is_multiarch else self.build_folder
                 goarch = self._arch_map.get(arch)

@@ -157,6 +157,27 @@ installation verify both profiles, restart persistence, WG and Xray DNS/HTTPS/IP
 and pinned SSH through Reality. Installer payloads contain no personal profiles;
 backups created later under `live-private` must remain private.
 
+### 103 helper revision 1: Windows error 1168
+
+The installed Xray error 804 was traced to `OpenAdapter` returning
+`ERROR_NOT_FOUND` (1168) for a missing own adapter. The helper now creates the
+adapter for both missing-file (2) and missing-element (1168), including wrapped
+errors; access denied and invalid parameter remain failures. The pinned Go
+dependency regression runs during its Windows build.
+
+The offline kit identifies the helper separately with `helperRevision` and its
+SHA-256. On an existing 103 installation the updater replaces only the verified
+helper after stopping owned resources, keeps a protected old-file backup, and
+restores it if copying fails. Unknown binaries and damaged payloads are rejected
+before stopping VPN. No VPN is automatically connected after updating.
+
+This fixes the confirmed Xray startup regression. A separate WG Wintun creation
+failure (problem 31 / NTSTATUS 0xC00002F0) remains under investigation. Shared
+driver resets are deliberately excluded because another active VPN uses it.
+Profile pruning was observed at initial startup but the obsolete container later
+reappeared; its persistence is not accepted yet. Installed Xray, WG and SSH
+acceptance still requires user-controlled switching.
+
 ### Rebuilding
 
 Use Developer PowerShell for VS 2022, Qt `6.10.1` (`msvc2022_64`), Conan `2.28.0`,
