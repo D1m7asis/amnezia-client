@@ -18,6 +18,8 @@ try {
  $exitCode=0
  Start-Sleep -Seconds 3
 }catch{
+ $failure=[ordered]@{timeUtc=[datetime]::UtcNow.ToString('o');success=$false;rollback=[bool]$Rollback;error=$_.Exception.Message}
+ $failure | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PSScriptRoot ('bootstrap-failure-'+[datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')+'.json'))
  Write-Host ('STOPPED: '+$_.Exception.Message) -ForegroundColor Red
  Write-Host 'Keep this folder. Check operation-* reports. Use ROLLBACK.cmd to restore 5.0.3.102.'
  Read-Host 'Press Enter to close'

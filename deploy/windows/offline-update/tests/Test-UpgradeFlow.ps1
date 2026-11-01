@@ -63,6 +63,7 @@ function Get-VpnProfileState {
 function Save-VpnProfileSnapshot([string]$Path){[IO.File]::WriteAllText($Path,'mock');Get-VpnProfileState}
 function Restore-VpnProfileSnapshot([string]$Path){$global:Offline103Fixture.Missing=$false;$global:Offline103Fixture.Hash='base';Get-VpnProfileState}
 function Get-VpnSnapshotMetadata([string]$Path){[pscustomobject]@{Count=2}}
+function Assert-VpnLegacyRecoveryCompatibility([string]$Path){if($global:Offline103Fixture.Incompatible){throw 'Injected incompatible legacy keys'}}
 function Update-VpnProfileLayout([switch]$ValidateOnly){if(-not $ValidateOnly){$global:Offline103Fixture.Hash='migrated'};[pscustomobject]@{Count=2;ObsoleteContainersRemoved=1;Written=(-not $ValidateOnly)}}
 '@
 $stopStub=@'
@@ -77,11 +78,11 @@ $global:Offline103Fixture.Version=if($Installer -like '*102*'){'old'}else{'new'}
 '@
 $passes=0
 try{
- foreach($mode in @('dry','upgrade','rollback','install-failure','rollback-missing-profiles','rollback-partial-folder')){
+ foreach($mode in @('dry','upgrade','rollback','install-failure','rollback-missing-profiles','rollback-partial-folder','rollback-incompatible-keys')){
   $dir=Join-Path $testRoot $mode
   New-Item -ItemType Directory -Path $dir | Out-Null
-  $global:Offline103Fixture=@{Installed=($mode -ne 'rollback-missing-profiles');Version='old';Hash='base';Missing=($mode -eq 'rollback-missing-profiles');Stops=0;FailInstall=($mode -eq 'install-failure');Partial=($mode -eq 'rollback-partial-folder');Quarantined=$false}
-  if($mode -eq 'rollback'){$global:Offline103Fixture.Version='new';$global:Offline103Fixture.Hash='migrated'}
+  $global:Offline103Fixture=@{Installed=($mode -ne 'rollback-missing-profiles');Version='old';Hash='base';Missing=($mode -eq 'rollback-missing-profiles');Stops=0;FailInstall=($mode -eq 'install-failure');Partial=($mode -eq 'rollback-partial-folder');Quarantined=$false;Incompatible=($mode -eq 'rollback-incompatible-keys')}
+  if($mode -in @('rollback','rollback-incompatible-keys')){$global:Offline103Fixture.Version='new';$global:Offline103Fixture.Hash='migrated'}
   [IO.File]::WriteAllText((Join-Path $dir 'Upgrade.ps1'),$source)
   [IO.File]::WriteAllText((Join-Path $dir 'Profile-Store.ps1'),$profileStub)
   [IO.File]::WriteAllText((Join-Path $dir 'Stop-OwnedVpn.ps1'),$stopStub)
@@ -97,9 +98,11 @@ try{
    @{appSha256=('A'*64)}|ConvertTo-Json|Set-Content (Join-Path $recovery 'manifest.json')
   }
   $failed=$false
-  try{& (Join-Path $dir 'Upgrade.ps1') -ValidateOnly:($mode -eq 'dry') -Rollback:$rollback | Out-Null}catch{$failed=$true;if($mode -ne 'install-failure'){throw}}
+  try{& (Join-Path $dir 'Upgrade.ps1') -ValidateOnly:($mode -eq 'dry') -Rollback:$rollback | Out-Null}catch{$failed=$true;if($mode -notin @('install-failure','rollback-incompatible-keys')){throw}}
   if($mode -eq 'dry'){
    if($global:Offline103Fixture.Stops -ne 0 -or $global:Offline103Fixture.Hash -ne 'base'){throw 'Dry run mutated fixture'}
+  }elseif($mode -eq 'rollback-incompatible-keys'){
+   if(-not $failed -or $global:Offline103Fixture.Stops -ne 0 -or $global:Offline103Fixture.Version -ne 'new'){throw 'Unsafe credential rollback was not rejected before stopping VPN'}
   }elseif($mode -eq 'install-failure'){
    if(-not $failed -or $global:Offline103Fixture.Hash -ne 'base'){throw 'Failure did not preserve fixture profiles'}
   }else{
@@ -111,7 +114,7 @@ try{
   }
   $passes++
  }
- "PASS: $passes isolated mocked flows: dry-run, upgrade, rollback, failed install recovery, rollback after missing installation/profiles and partial-folder quarantine. No real VPN processes, services, devices or profiles changed."
+ "PASS: $passes isolated mocked flows: dry-run, upgrade, rollback, failed install recovery, rollback after missing installation/profiles partial-folder quarantine and incompatible legacy-key rejection. No real VPN processes, services, devices or profiles changed."
 }finally{
  $resolved=[IO.Path]::GetFullPath($testRoot)
  $allowed=[IO.Path]::GetFullPath($env:TEMP)+[IO.Path]::DirectorySeparatorChar+'D1mis-UpgradeTest-'

@@ -124,3 +124,13 @@ function Get-VpnSnapshotMetadata([string]$Path) {
  try{$profiles=Convert-VpnProfiles ([Convert]::FromBase64String($p.blob)) $material;if($profiles.Count -ne $p.count){throw 'Snapshot content mismatch'}}finally{[Array]::Clear($material,0,$material.Length)}
  [pscustomobject]@{Count=$p.count}
 }
+
+function Assert-VpnLegacyRecoveryCompatibility([string]$Path) {
+ [void](Get-VpnSnapshotMetadata $Path)
+ $bytes=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($Path),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+ try{$p=[Text.Encoding]::UTF8.GetString($bytes)|ConvertFrom-Json}finally{[Array]::Clear($bytes,0,$bytes.Length)}
+ $key=[VpnStoreRead]::Read('settingsKeyTag');$iv=[VpnStoreRead]::Read('settingsIvTag')
+ try{
+  if($null -eq $key -or $null -eq $iv -or $key.Length -ne 32 -or $iv.Length -ne 32 -or [Convert]::ToBase64String([byte[]]($key+$iv)) -cne $p.material){throw 'Legacy rollback credentials changed; keep 103 installed. Shared credentials were not modified.'}
+ }finally{foreach($value in @($key,$iv)){if($null -ne $value){[Array]::Clear($value,0,$value.Length)}}}
+}

@@ -36,6 +36,7 @@ try{$state=Get-VpnProfileState}catch{
  $state=[pscustomobject]@{Count=$metadata.Count;Hash=$null}
 }
 if($Rollback){
+ Assert-VpnLegacyRecoveryCompatibility (Join-Path $recovery 'profiles.dpapi')
  $metadata=Get-VpnSnapshotMetadata (Join-Path $recovery 'profiles.dpapi')
  if($hasCurrentProfiles -and $state.Count -ne $metadata.Count){throw 'Profile count changed since upgrade; automatic rollback would overwrite newer profiles'}
 }
