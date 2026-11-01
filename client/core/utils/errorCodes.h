@@ -17,6 +17,7 @@ namespace amnezia
         InternalError = 101,
         ManagedWireguardAddressInvalid = 105,
         XrayTunAddressFailed = 106,
+        ConflictingWindowsVpn = 107,
         NotImplementedError = 102,
         AmneziaServiceNotRunning = 103,
         NotSupportedOnThisPlatform = 104,

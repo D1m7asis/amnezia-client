@@ -50,6 +50,10 @@ if(NOT ANDROID)
     target_link_libraries(test_wireguard_address_allocation PRIVATE Qt6::Test test_common)
     add_test(NAME WireguardAddressAllocationTest COMMAND test_wireguard_address_allocation)
     if(WIN32)
+        add_executable(test_windows_vpn_conflict testWindowsVpnConflict.cpp)
+        target_include_directories(test_windows_vpn_conflict PRIVATE ..)
+        target_link_libraries(test_windows_vpn_conflict PRIVATE Qt6::Test Qt6::Network)
+        add_test(NAME WindowsVpnConflictTest COMMAND test_windows_vpn_conflict)
         foreach(_offline_test Profiles UpgradeFlow Devices ProcessIdentity StopOwned HelperUpdate)
             add_test(NAME OfflineUpdate${_offline_test}Test
                 COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"

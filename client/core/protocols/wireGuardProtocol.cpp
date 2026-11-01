@@ -6,6 +6,9 @@
 
 #include "wireGuardProtocol.h"
 #include "core/utils/networkUtilities.h"
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+#include "core/utils/windowsVpnConflict.h"
+#endif
 
 #include "mozilla/localsocketcontroller.h"
 
@@ -56,6 +59,11 @@ void WireguardProtocol::stop()
 
 ErrorCode WireguardProtocol::startMzImpl()
 {
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    if (windowsVpnConflict::hasActiveOfficialTunnel()) {
+        return ErrorCode::ConflictingWindowsVpn;
+    }
+#endif
     QString protocolName = m_rawConfig.value("protocol").toString();
     QJsonObject vpnConfigData = m_rawConfig.value(protocolName + "_config_data").toObject();
     vpnConfigData[configKey::hostName] = NetworkUtilities::getIPAddress(vpnConfigData.value(configKey::hostName).toString());

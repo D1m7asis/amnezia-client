@@ -6,7 +6,9 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'Remove-OwnedXrayAdapters.ps1')
 . (Join-Path $PSScriptRoot 'Update-OwnedHelper.ps1')
 $root='C:\Program Files\D1m7asisVPN'
-$old=Get-Content (Join-Path $PSScriptRoot 'installed102-manifest.json') -Raw | ConvertFrom-Json
+$previousManifest=Join-Path $PSScriptRoot 'installed-manifest.json'
+if(-not (Test-Path -LiteralPath $previousManifest)){$previousManifest=Join-Path $PSScriptRoot 'installed102-manifest.json'}
+$old=Get-Content $previousManifest -Raw | ConvertFrom-Json
 $new=Get-Content (Join-Path $PSScriptRoot 'release-manifest.json') -Raw | ConvertFrom-Json
 $target=if($Rollback){$old}else{$new}
 $installer=if($Rollback){Join-Path $PSScriptRoot ('rollback\'+$old.installer)}else{Join-Path $PSScriptRoot $new.installer}
@@ -37,7 +39,7 @@ try{$state=Get-VpnProfileState}catch{
  $state=[pscustomobject]@{Count=$metadata.Count;Hash=$null}
 }
 if($Rollback){
- Assert-VpnLegacyRecoveryCompatibility (Join-Path $recovery 'profiles.dpapi')
+ if(-not $old.usesScopedCredentials){Assert-VpnLegacyRecoveryCompatibility (Join-Path $recovery 'profiles.dpapi')}
  $metadata=Get-VpnSnapshotMetadata (Join-Path $recovery 'profiles.dpapi')
  if($hasCurrentProfiles -and $state.Count -ne $metadata.Count){throw 'Profile count changed since upgrade; automatic rollback would overwrite newer profiles'}
 }
@@ -59,7 +61,7 @@ $official=Get-CimInstance Win32_Service -Filter "Name='AmneziaVPN-service'"
 $officialHash=(Get-FileHash -LiteralPath 'C:\Program Files\AmneziaVPN\AmneziaVPN.exe').Hash
 $stamp=[datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $report=Join-Path $PSScriptRoot ('operation-'+$stamp)
-$backup=Join-Path $PSScriptRoot ('live-private\before103-'+$stamp)
+$backup=Join-Path $PSScriptRoot ('live-private\before-update-'+$stamp)
 New-Item -ItemType Directory -Path $report,$backup -Force | Out-Null
 & icacls.exe $backup /inheritance:r /grant:r ($identity.Name+':(OI)(CI)F') | Out-Null
 if($LASTEXITCODE){throw 'Cannot protect backup directory'}

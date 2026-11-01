@@ -145,6 +145,8 @@ QString errorString(ErrorCode code) {
         errorMessage = QStringLiteral("Адрес AmneziaWG не входит в подсеть сервера. Обновите этот профиль; сохранённые данные не изменены."); break;
     case(ErrorCode::XrayTunAddressFailed):
         errorMessage = QStringLiteral("Не удалось настроить локальный адаптер Xray. Подробности сохранены в журнале."); break;
+    case(ErrorCode::ConflictingWindowsVpn):
+        errorMessage = QStringLiteral("\u0410\u043a\u0442\u0438\u0432\u0435\u043d \u0442\u0443\u043d\u043d\u0435\u043b\u044c \u043e\u0444\u0438\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0433\u043e AmneziaVPN. \u041e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u0435\u0433\u043e \u0432\u0440\u0443\u0447\u043d\u0443\u044e, \u0437\u0430\u0442\u0435\u043c \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0435 D1m7asis VPN. \u0414\u0432\u0430 \u0442\u0443\u043d\u043d\u0435\u043b\u044f \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442\u0443\u044e\u0442 \u043f\u043e \u0430\u0434\u0440\u0435\u0441\u0430\u043c, \u043c\u0430\u0440\u0448\u0440\u0443\u0442\u0430\u043c \u0438 \u0441\u0435\u0442\u0435\u0432\u044b\u043c \u0444\u0438\u043b\u044c\u0442\u0440\u0430\u043c. \u0422\u0435\u043a\u0443\u0449\u0438\u0439 VPN \u043d\u0435 \u0438\u0437\u043c\u0435\u043d\u0451\u043d."); break;
     case(ErrorCode::InternalError):
     default:
         errorMessage = QObject::tr("Internal error"); break;

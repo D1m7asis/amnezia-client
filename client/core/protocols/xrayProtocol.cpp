@@ -9,6 +9,9 @@
 #include "core/utils/constants/protocolConstants.h"
 #include "core/utils/ipcClient.h"
 #include "core/utils/networkUtilities.h"
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+#include "core/utils/windowsVpnConflict.h"
+#endif
 #include "core/utils/serialization/serialization.h"
 #include "ipc.h"
 #include "version.h"
@@ -79,6 +82,11 @@ ErrorCode XrayProtocol::start()
     qDebug() << "XrayProtocol::start()";
     if (m_started)
         return ErrorCode::NoError;
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    if (windowsVpnConflict::hasActiveOfficialTunnel()) {
+        return ErrorCode::ConflictingWindowsVpn;
+    }
+#endif
     m_tun2socksRetryCount = 0;
     m_routingSetup = false;
 

@@ -79,13 +79,14 @@ $global:Offline103Fixture.Version=if($Installer -like '*102*'){'old'}else{'new'}
 '@
 $passes=0
 try{
- foreach($mode in @('dry','upgrade','rollback','install-failure','rollback-missing-profiles','rollback-partial-folder','rollback-incompatible-keys','helper-repair')){
+ foreach($mode in @('dry','upgrade','rollback','install-failure','rollback-missing-profiles','rollback-partial-folder','rollback-incompatible-keys','helper-repair','rollback-scoped')){
   $dir=Join-Path $testRoot $mode
   New-Item -ItemType Directory -Path $dir | Out-Null
   $global:Offline103Fixture=@{Installed=($mode -ne 'rollback-missing-profiles');Version='old';Hash='base';Missing=($mode -eq 'rollback-missing-profiles');Stops=0;FailInstall=($mode -eq 'install-failure');Partial=($mode -eq 'rollback-partial-folder');Quarantined=$false;Incompatible=($mode -eq 'rollback-incompatible-keys')}
   if($mode -in @('rollback','rollback-incompatible-keys')){$global:Offline103Fixture.Version='new';$global:Offline103Fixture.Hash='migrated'}
   $global:Offline103Fixture.HelperHash='2'*64
   if($mode -eq 'helper-repair'){$global:Offline103Fixture.Version='new'}
+  if($mode -eq 'rollback-scoped'){$global:Offline103Fixture.Version='new';$global:Offline103Fixture.Incompatible=$true}
   [IO.File]::WriteAllText((Join-Path $dir 'Upgrade.ps1'),$source)
   Copy-Item -LiteralPath (Join-Path $kit 'Update-OwnedHelper.ps1') -Destination $dir
   [IO.File]::WriteAllText((Join-Path $dir 'Profile-Store.ps1'),$profileStub)
@@ -93,6 +94,9 @@ try{
   [IO.File]::WriteAllText((Join-Path $dir 'Install-VerifiedFork.ps1'),$installStub)
   [IO.File]::WriteAllText((Join-Path $dir 'Remove-OwnedXrayAdapters.ps1'),'function Remove-OwnedXrayAdapters {return 2}')
   @{installer='D1m7asisVPN_5.0.3.102_windows_x64.exe';installerSha256=('C'*64);appSha256=('A'*64);serviceSha256=('B'*64)}|ConvertTo-Json|Set-Content (Join-Path $dir 'installed102-manifest.json')
+  if($mode -eq 'rollback-scoped'){
+   @{installer='D1m7asisVPN_5.0.3.102_windows_x64.exe';installerSha256=('C'*64);appSha256=('A'*64);serviceSha256=('B'*64);usesScopedCredentials=$true}|ConvertTo-Json|Set-Content (Join-Path $dir 'installed-manifest.json')
+  }
   @{installer='D1m7asisVPN_5.0.3.103_windows_x64.exe';installerSha256=('D'*64);appSha256=('E'*64);serviceSha256=('F'*64)}|ConvertTo-Json|Set-Content (Join-Path $dir 'release-manifest.json')
   if($mode -eq 'helper-repair'){
    @{installer='D1m7asisVPN_5.0.3.103_windows_x64.exe';installerSha256=('D'*64);appSha256=('E'*64);serviceSha256=('F'*64);helperRevision=1;tun2socksSha256=('2'*64);previousTun2socksSha256=('3'*64)}|ConvertTo-Json|Set-Content (Join-Path $dir 'release-manifest.json')

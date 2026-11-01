@@ -178,6 +178,23 @@ Profile pruning was observed at initial startup but the obsolete container later
 reappeared; its persistence is not accepted yet. Installed Xray, WG and SSH
 acceptance still requires user-controlled switching.
 
+### 104: mutually exclusive Windows tunnels
+
+Fresh installed logs showed WG reaching startup and then failing at address
+configuration with Windows 5010. The official `AmneziaVPN` interface was active
+with the same `10.8.1.6/32` address. Xray could start but the browser reported
+`ERR_NETWORK_ACCESS_DENIED`; overlapping VPN filtering is suspected, not proven
+by a WFP capture (enumeration requires elevation).
+
+The fork now rejects a WG or Xray start while an active official `AmneziaVPN`
+interface has a usable IPv4 address. Error 107 explains manual disconnection.
+This check precedes backend activation and is repeated on reconnect. It never
+stops a foreign VPN, removes its routes or changes its firewall. Down, empty,
+loopback and link-local-only adapters, Radmin and physical interfaces do not
+trigger it. This prevents the confirmed concurrent-tunnel address conflict;
+single-tunnel installed WG/Xray acceptance is still required. Earlier Wintun
+problem-31 failures are not declared solved by this guard.
+
 ### Rebuilding
 
 Use Developer PowerShell for VS 2022, Qt `6.10.1` (`msvc2022_64`), Conan `2.28.0`,
