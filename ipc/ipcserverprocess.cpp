@@ -33,11 +33,23 @@ void IpcServerProcess::start()
         qDebug() << "IpcServerProcess failed to start, program is empty";
     }
 
+    if (m_process->state() != QProcess::NotRunning)
+        return;
+#if !defined(Q_OS_WIN) || !D1MISVPN_WINDOWS_FORK
     Utils::killProcessByName(m_process->program());
+#endif
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    if (!m_job.ready()) {
+        qCritical() << "Helper stage=process-ownership unavailable";
+        emit errorOccurred(QProcess::FailedToStart);
+        return;
+    }
+    m_job.bind(*m_process);
+#endif
     m_process->start();
-    qDebug() << "IpcServerProcess started, " << m_process->program() << m_process->arguments();
-
-    m_process->waitForStarted();
+    if (!m_process->waitForStarted())
+        return;
+    qDebug() << "IpcServerProcess started program id=" << static_cast<int>(m_program);
 }
 
 void IpcServerProcess::terminate() {

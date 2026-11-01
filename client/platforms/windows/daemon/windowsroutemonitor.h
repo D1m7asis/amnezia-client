@@ -13,6 +13,7 @@
 
 #include <QHash>
 #include <QMap>
+#include <QSet>
 #include <QObject>
 
 #include "ipaddress.h"
@@ -54,6 +55,8 @@ class WindowsRouteMonitor final : public QObject {
   // Default route cloning
   bool m_defaultRouteCapture = false;
   QHash<IPAddress, MIB_IPFORWARD_ROW2*> m_clonedRoutes;
+
+  QSet<const MIB_IPFORWARD_ROW2 *> m_borrowedRoutes;
 
   const quint64 m_luid = 0;
   HANDLE m_routeHandle = INVALID_HANDLE_VALUE;

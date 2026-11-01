@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#include <winsock2.h>
+#include <iphlpapi.h>
+#endif
 #include "xrayProtocol.h"
 
 #include "core/protocols/protocolUtils.h"
@@ -8,6 +12,7 @@
 #include "core/utils/serialization/serialization.h"
 #include "ipc.h"
 #include "version.h"
+#include "logger.h"
 
 #include <QCryptographicHash>
 #include <QJsonDocument>
@@ -72,6 +77,10 @@ XrayProtocol::~XrayProtocol()
 ErrorCode XrayProtocol::start()
 {
     qDebug() << "XrayProtocol::start()";
+    if (m_started)
+        return ErrorCode::NoError;
+    m_tun2socksRetryCount = 0;
+    m_routingSetup = false;
 
     // Inject SOCKS5 auth into the inbound before starting xray.
     // Re-uses existing credentials if the config already has them (e.g. imported config).
@@ -116,6 +125,7 @@ ErrorCode XrayProtocol::start()
                     qCritical() << "Failed to start xray";
                     return ErrorCode::XrayExecutableCrashed;
                 }
+                m_started = true;
                 return startTun2Socks();
             },
             []() { return ErrorCode::AmneziaServiceConnectionFailed; });
@@ -124,6 +134,11 @@ ErrorCode XrayProtocol::start()
 void XrayProtocol::stop()
 {
     qDebug() << "XrayProtocol::stop()";
+    if (!m_started && !m_tun2socksProcess)
+        return;
+    ++m_generation;
+    m_started = false;
+    m_routingSetup = false;
 
     IpcClient::withInterface([](QSharedPointer<IpcInterfaceReplica> iface) {
         auto disableKillSwitch = iface->disableKillSwitch();
@@ -172,6 +187,7 @@ void XrayProtocol::stop()
 
 ErrorCode XrayProtocol::startTun2Socks()
 {
+    const auto generation = ++m_generation;
     m_tun2socksProcess = IpcClient::CreatePrivilegedProcess();
     if (!m_tun2socksProcess->waitForSource()) {
         return ErrorCode::AmneziaServiceConnectionFailed;
@@ -184,7 +200,8 @@ ErrorCode XrayProtocol::startTun2Socks()
 
     connect(
             m_tun2socksProcess.data(), &IpcProcessInterfaceReplica::readyReadStandardError, this, 
-            [this]() {
+            [this, generation]() {
+                if (!m_started || generation != m_generation) return;
                 auto readAllStandardError = m_tun2socksProcess->readAllStandardError();
                 if (!readAllStandardError.waitForFinished()) {
                     qWarning() << "Failed to read output from tun2socks";
@@ -197,7 +214,9 @@ ErrorCode XrayProtocol::startTun2Socks()
                     qDebug() << "[tun2socks]:" << line;
 
                 if (line.contains("[STACK] tun://") && line.contains("<-> socks5://")) {
-                    disconnect(m_tun2socksProcess.data(), &IpcProcessInterfaceReplica::readyReadStandardOutput, this, nullptr);
+                    if (!m_started || m_routingSetup)
+                        return;
+                    m_routingSetup = true;
 
                     if (ErrorCode res = setupRouting(); res != ErrorCode::NoError) {
                         stop();
@@ -211,7 +230,8 @@ ErrorCode XrayProtocol::startTun2Socks()
 
     connect(
             m_tun2socksProcess.data(), &IpcProcessInterfaceReplica::finished, this,
-            [this](int exitCode, QProcess::ExitStatus exitStatus) {
+            [this, generation](int exitCode, QProcess::ExitStatus exitStatus) {
+                if (!m_started || generation != m_generation) return;
                 // Check stdout for "resource busy" — the TUN device was not yet released
                 // by the previous tun2socks instance. Retry after a short delay.
                 bool resourceBusy = false;
@@ -228,7 +248,9 @@ ErrorCode XrayProtocol::startTun2Socks()
                                       .arg(m_tun2socksRetryCount)
                                       .arg(maxTun2SocksRetries)
                                       .arg(tun2socksRetryDelayMs);
-                    QTimer::singleShot(tun2socksRetryDelayMs, this, [this]() {
+                    QTimer::singleShot(tun2socksRetryDelayMs, this, [this, generation]() {
+                        if (!m_started || generation != m_generation)
+                            return;
                         if (ErrorCode err = startTun2Socks(); err != ErrorCode::NoError) {
                             stop();
                             setLastError(err);
@@ -249,6 +271,13 @@ ErrorCode XrayProtocol::startTun2Socks()
             },
             Qt::QueuedConnection);
 
+    connect(m_tun2socksProcess.data(), &IpcProcessInterfaceReplica::errorOccurred, this,
+            [this, generation](QProcess::ProcessError error) {
+                if (error != QProcess::FailedToStart || !m_started || generation != m_generation) return;
+                Logger::recordFailure("xray-helper-start", static_cast<int>(error));
+                stop();
+                setLastError(ErrorCode::Tun2SockExecutableCrashed);
+            }, Qt::QueuedConnection);
     m_tun2socksProcess->start();
     return ErrorCode::NoError;
 }
@@ -262,25 +291,26 @@ ErrorCode XrayProtocol::setupRouting()
 #endif
                 auto createTun = iface->createTun(tunName, amnezia::protocols::xray::defaultLocalAddr);
                 if (!createTun.waitForFinished() || !createTun.returnValue()) {
-                    qCritical() << "Failed to assign IP address for TUN";
-                    return ErrorCode::InternalError;
+                    Logger::recordFailure("xray-tun-address", 106);
+                    qCritical() << "Xray stage=tun-address failed";
+                    return ErrorCode::XrayTunAddressFailed;
                 }
 
                 auto updateResolvers = iface->updateResolvers(tunName, m_dnsServers);
                 if (!updateResolvers.waitForFinished() || !updateResolvers.returnValue()) {
+                    Logger::recordFailure("xray-dns", 101);
                     qCritical() << "Failed to set DNS resolvers for TUN";
                     return ErrorCode::InternalError;
                 }
 
 #ifdef Q_OS_WIN
-                int vpnAdapterIndex = -1;
-                QList<QNetworkInterface> netInterfaces = QNetworkInterface::allInterfaces();
-                for (auto &netInterface : netInterfaces) {
-                    for (auto &address : netInterface.addressEntries()) {
-                        if (m_vpnLocalAddress == address.ip().toString())
-                            vpnAdapterIndex = netInterface.index();
-                    }
-                }
+                NET_LUID tunLuid {};
+                NET_IFINDEX tunIndex = 0;
+                const DWORD resolve = ConvertInterfaceAliasToLuid(
+                    reinterpret_cast<const wchar_t *>(tunName.utf16()), &tunLuid);
+                const int vpnAdapterIndex = resolve == NO_ERROR
+                    && ConvertInterfaceLuidToIndex(&tunLuid, &tunIndex) == NO_ERROR
+                    ? static_cast<int>(tunIndex) : -1;
 #else
                 static const int vpnAdapterIndex = 0;
 #endif
@@ -305,6 +335,7 @@ ErrorCode XrayProtocol::setupRouting()
 
                     auto routeAddList = iface->routeAddList(m_vpnGateway, subnets);
                     if (!routeAddList.waitForFinished() || routeAddList.returnValue() != subnets.count()) {
+                        Logger::recordFailure("xray-routes", 101);
                         qCritical() << "Failed to set routes for TUN";
                         return ErrorCode::InternalError;
                     }

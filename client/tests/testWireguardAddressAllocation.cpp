@@ -5,6 +5,25 @@ class TestWireguardAddressAllocation : public QObject
 {
     Q_OBJECT
 private slots:
+    void validatesCachedManagedConfig()
+    {
+        amnezia::AwgProtocolConfig config;
+        config.serverConfig.subnetAddress = "10.8.1.0";
+        config.serverConfig.subnetCidr = "24";
+        config.clientConfig = amnezia::AwgClientConfig {};
+        config.clientConfig->clientIp = "10.8.2.1/32";
+        QVERIFY(!WireguardConfigurator::hasCompatibleClientAddress(config));
+        config.clientConfig->clientIp = "10.8.1.6/32";
+        QVERIFY(WireguardConfigurator::hasCompatibleClientAddress(config));
+        config.clientConfig->clientIp = "10.8.1.255/32";
+        QVERIFY(!WireguardConfigurator::hasCompatibleClientAddress(config));
+        config.serverConfig.isThirdPartyConfig = true;
+        QVERIFY(WireguardConfigurator::hasCompatibleClientAddress(config));
+        config.serverConfig.isThirdPartyConfig = false;
+        config.serverConfig.subnetAddress.clear();
+        QVERIFY(WireguardConfigurator::hasCompatibleClientAddress(config));
+    }
+
     void reusesFreeAddressInsideSubnet()
     {
         const QList<QHostAddress> used { QHostAddress("10.8.1.1"), QHostAddress("10.8.1.254"), QHostAddress("10.8.2.1") };

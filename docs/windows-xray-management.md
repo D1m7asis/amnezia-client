@@ -104,6 +104,58 @@ refuses to overwrite an existing test route. General CTest runs skip this test's
 privileged operation. Acceptance still requires the installed fork's own WG
 adapter and daemon, without the temporary manual endpoint route.
 
+### Windows reconnect and settings recovery (5.0.3.103, 2026-11-01)
+
+Fresh local logs confirmed error 101 at Windows TUN address assignment after a
+10-second wait. The service now queries the actual interface/address/DAD state,
+including already assigned addresses and the final timeout check. It removes
+only addresses created by its own session. Native API boundary tests do not
+change the user's network.
+
+The Windows tun2socks recipe vendors its pinned WireGuard Go module and opens an
+existing `d1misxray` adapter before creating one. Other adapter names retain
+upstream behavior. This keeps transport, IP assignment, DNS and routing on the
+same interface. The existing Windows dependency is patched in a private vendor
+copy, never in the shared Go cache. Source references checked 2026-11-01:
+[tun2socks 2.6.0](https://github.com/xjasonlyu/tun2socks/blob/v2.6.0/core/device/tun/tun_wireguard_windows.go)
+and its pinned WireGuard Go revision `f333402bd9cb`.
+
+Fork helper processes are created atomically inside a Windows job with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. The fork does not kill helpers by name or
+log their arguments. Cancelled Xray attempts invalidate queued retries and stack
+callbacks. Matching existing WG routes are borrowed and never deleted; owned
+routes are tracked separately. Minimal local failure records include only UTC,
+stage and numeric code, even if verbose logging is disabled.
+
+Managed WG cached addresses are validated against the known server subnet before
+connection. Imported profiles without authoritative subnet information are not
+subject to this check. Invalid data is rejected without overwriting the cache.
+
+The Windows fork stores its encryption key and IV together in a single atomic
+Credential Manager entry scoped by keychain, organization and application:
+`D1m7asisVPN-Keychain/D1m7asis.VPN/D1m7asisVPN/settingsMaterial-v1`.
+Migration reads historical shared keys without modifying them, validates the
+existing encrypted JSON array, writes and verifies a CurrentUser-DPAPI recovery
+file, and only then copies the material into the scoped credential. An unreadable
+or corrupt store never triggers replacement keys; startup shows a recovery
+message rather than presenting an empty profile list. Tests use UUID-scoped
+credentials and registry data, never the user's production credential targets.
+
+Offline update sources are in `deploy/windows/offline-update`. The packaged
+update includes verified 102 and 103 installers, backups, local operation reports
+and `ROLLBACK.cmd`. The migration removes only the obsolete `10.8.2.1` WG
+container from the identified Reality management profile, preserving Xray, SSH,
+profile IDs and the separate working WG profile. It does not revoke server peers.
+The updater removes stale own Xray device instances only after stopping exact
+owned processes and validating adapter GUID, Wintun device ID and service.
+It never removes the shared Wintun driver.
+
+Installation, VPN switching, outage tests and reboot remain user-controlled.
+Build/unit/mock checks do not establish installed-network acceptance. After
+installation verify both profiles, restart persistence, WG and Xray DNS/HTTPS/IP,
+and pinned SSH through Reality. Installer payloads contain no personal profiles;
+backups created later under `live-private` must remain private.
+
 ### Rebuilding
 
 Use Developer PowerShell for VS 2022, Qt `6.10.1` (`msvc2022_64`), Conan `2.28.0`,

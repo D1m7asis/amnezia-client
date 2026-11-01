@@ -25,6 +25,9 @@ private:
     ErrorCode setupRouting();
     ErrorCode startTun2Socks();
 
+    quint64 m_generation = 0;
+    bool m_started = false;
+    bool m_routingSetup = false;
     QJsonObject m_xrayConfig;
     amnezia::RouteMode m_routeMode;
     QList<QHostAddress> m_dnsServers;

@@ -1,4 +1,7 @@
 #include "amneziaApplication.h"
+#if defined(Q_OS_WIN)
+#include <QMessageBox>
+#endif
 
 #include <QClipboard>
 #include <QFontDatabase>
@@ -106,6 +109,15 @@ namespace {
 
 void AmneziaApplication::init()
 {
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    if (!m_settings->profileStoreReadable()) {
+        QMessageBox::critical(nullptr, QStringLiteral("D1m7asis VPN"),
+            QStringLiteral("Не удалось прочитать защищённые профили. Данные сохранены без изменений. "
+                           "Повторите запуск после входа в Windows или используйте резервную копию обновления."));
+        QTimer::singleShot(0, this, []() { QCoreApplication::exit(2); });
+        return;
+    }
+#endif
     m_engine = new QQmlApplicationEngine;
 
     const QUrl url(QStringLiteral(APP_QML_ENTRYPOINT));

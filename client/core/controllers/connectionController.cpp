@@ -1,4 +1,5 @@
 #include "connectionController.h"
+#include "core/configurators/wireguardConfigurator.h"
 
 #include <QJsonDocument>
 
@@ -198,6 +199,12 @@ ErrorCode ConnectionController::prepareConnection(const QString &serverId,
     case serverConfigUtils::ConfigType::Invalid:
     default:
         return ErrorCode::InternalError;
+    }
+
+    if (kind == serverConfigUtils::ConfigType::SelfHostedAdmin
+        && !WireguardConfigurator::hasCompatibleClientAddress(containerConfigModel.protocolConfig)) {
+        qWarning() << "Connection stage=managed-wg-subnet configuration rejected; stored profile preserved";
+        return ErrorCode::ManagedWireguardAddressInvalid;
     }
 
     vpnConfiguration = createConnectionConfiguration(dns, isApiConfig, hostName, description, configVersion,

@@ -39,6 +39,7 @@ public:
     amnezia::ProtocolConfig processConfigWithExportSettings(const amnezia::ExportSettings &settings,
                                                             amnezia::ProtocolConfig protocolConfig) override;
 
+    static bool hasCompatibleClientAddress(const amnezia::ProtocolConfig &config);
     static ConnectionData genClientKeys();
     static QHostAddress nextClientAddress(const QHostAddress &serverAddress, int prefixLength,
                                           const QList<QHostAddress> &usedAddresses);

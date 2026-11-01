@@ -47,6 +47,7 @@ public:
     bool StopRoutingIpv6();
 
     bool createTun(const QString &dev, const QString &subnet);
+    bool deleteTun(const QString &dev);
     void suspendWcmSvc(bool suspend);
     bool updateResolvers(const QString& ifname, const QList<QHostAddress>& resolvers);
     bool restoreResolvers();
@@ -67,6 +68,7 @@ private:
 
 private:
     RouterWin() {m_dnsUtil = new DnsUtilsWindows(this);}
+    QMap<QString, MIB_UNICASTIPADDRESS_ROW> m_ownedTunAddresses;
     QMultiMap<QString, MIB_IPFORWARDROW> m_ipForwardRows;
     QList<MIB_IPFORWARD_ROW2> m_ownedIpv6Routes;
     bool m_suspended = false;

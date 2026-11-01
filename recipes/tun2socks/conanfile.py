@@ -1,6 +1,6 @@
 from conan import ConanFile
 from conan.tools.layout import basic_layout
-from conan.tools.files import get, copy, chdir
+from conan.tools.files import get, copy, chdir, load, save
 from conan.errors import ConanInvalidConfiguration
 from conan.tools.apple import XCRun
 from conan.tools.gnu import Autotools, AutotoolsToolchain
@@ -98,6 +98,26 @@ class Tun2Socks(ConanFile):
 
     def build(self):
         with chdir(self, self.source_folder):
+            if self._is_windows:
+                # Keep a private, patched module copy; never edit the shared Go cache.
+                self.run("go mod vendor")
+                target = os.path.join(self.source_folder, "vendor", "golang.zx2c4.com", "wireguard", "tun", "tun_windows.go")
+                source = load(self, target)
+                original = "wt, err := wintun.CreateAdapter(ifname, WintunTunnelType, requestedGUID)"
+                patched = """var wt *wintun.Adapter
+    var err error
+    if ifname == "d1misxray" {
+        wt, err = wintun.OpenAdapter(ifname)
+        if err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+            return nil, fmt.Errorf("Error opening owned interface: %w", err)
+        }
+    }
+    if wt == nil {
+        wt, err = wintun.CreateAdapter(ifname, WintunTunnelType, requestedGUID)
+    }"""
+                if source.count(original) != 1:
+                    raise ConanInvalidConfiguration("Pinned WireGuard TUN source changed")
+                save(self, target, source.replace(original, patched))
             for arch in self._archs:
                 build_dir = os.path.join(self.build_folder, arch) if self._is_multiarch else self.build_folder
                 goarch = self._arch_map.get(arch)

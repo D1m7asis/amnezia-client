@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "windowsroutemonitor.h"
+#include "windowsrouteownership.h"
 
 #include <QScopeGuard>
 
@@ -27,6 +28,7 @@ static void routeChangeCallback(PVOID context, PMIB_IPFORWARD_ROW2 row,
   Q_UNUSED(type);
 
   // Ignore route changes that we created.
+  if (!row) return;
   if ((row->Protocol == MIB_IPPROTO_NETMGMT) &&
       (row->Metric == EXCLUSION_ROUTE_METRIC)) {
     return;
@@ -189,7 +191,7 @@ bool WindowsRouteMonitor::updateExclusionRoute(MIB_IPFORWARD_ROW2* data,
 
   // Delete the previous routing table entry, if any.
   if (data->InterfaceLuid.Value != 0) {
-    DWORD result = DeleteIpForwardEntry2(data);
+    DWORD result = releaseWindowsRoute(data, !m_borrowedRoutes.remove(data));
     if ((result != NO_ERROR) && (result != ERROR_NOT_FOUND)) {
       logger.error() << "Failed to delete route:" << result;
       return false;
@@ -310,7 +312,7 @@ void WindowsRouteMonitor::updateCapturedRoutes(int family, void* ptable) {
     logger.debug() << "Capturing route to" << prefix.toString();
 
     // Clone the route and direct it into the VPN tunnel.
-    data = new MIB_IPFORWARD_ROW2;
+    data = new MIB_IPFORWARD_ROW2 {};
     InitializeIpForwardEntry(data);
     data->InterfaceLuid.Value = m_luid;
     data->DestinationPrefix = row->DestinationPrefix;
@@ -328,7 +330,10 @@ void WindowsRouteMonitor::updateCapturedRoutes(int family, void* ptable) {
     data->Age = 0;
 
     // Route this traffic into the VPN tunnel.
-    DWORD result = CreateIpForwardEntry2(data);
+    bool owned = false;
+    DWORD result = acquireWindowsRoute(data, owned);
+    if (result == NO_ERROR && !owned)
+      m_borrowedRoutes.insert(data);
     if (result != NO_ERROR) {
       logger.error() << "Failed to update route:" << result;
       delete data;
@@ -360,7 +365,7 @@ void WindowsRouteMonitor::updateCapturedRoutes(int family, void* ptable) {
     logger.debug() << "Removing route capture for" << i.key().toString();
 
     // Otherwise, this route is no longer in use.
-    DWORD result = DeleteIpForwardEntry2(data);
+    DWORD result = releaseWindowsRoute(data, !m_borrowedRoutes.remove(data));
     if ((result != NO_ERROR) && (result != ERROR_NOT_FOUND)) {
       logger.error() << "Failed to delete route:" << result;
     }
@@ -449,7 +454,7 @@ bool WindowsRouteMonitor::deleteExclusionRoute(const IPAddress& prefix) {
     return true;
   }
 
-  DWORD result = data->InterfaceLuid.Value ? DeleteIpForwardEntry2(data) : NO_ERROR;
+  DWORD result = releaseWindowsRoute(data, !m_borrowedRoutes.remove(data) && data->InterfaceLuid.Value != 0);
   if ((result != ERROR_NOT_FOUND) && (result != NO_ERROR)) {
     logger.error() << "Failed to delete route to"
                    << prefix.toString()
@@ -467,7 +472,7 @@ void WindowsRouteMonitor::flushRouteTable(
     QHash<IPAddress, MIB_IPFORWARD_ROW2*>& table) {
   for (auto i = table.begin(); i != table.end(); i++) {
     MIB_IPFORWARD_ROW2* data = i.value();
-    DWORD result = data->InterfaceLuid.Value ? DeleteIpForwardEntry2(data) : NO_ERROR;
+    DWORD result = releaseWindowsRoute(data, !m_borrowedRoutes.remove(data) && data->InterfaceLuid.Value != 0);
     if ((result != ERROR_NOT_FOUND) && (result != NO_ERROR)) {
       logger.error() << "Failed to delete route to"
                      << i.key().toString()

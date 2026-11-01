@@ -42,10 +42,35 @@ target_include_directories(test_common PUBLIC
 )
 
 if(NOT ANDROID)
+    add_executable(test_settings_key_migration testSettingsKeyMigration.cpp)
+    target_include_directories(test_settings_key_migration PRIVATE ..)
+    target_link_libraries(test_settings_key_migration PRIVATE Qt6::Test)
+    add_test(NAME SettingsKeyMigrationTest COMMAND test_settings_key_migration)
     add_executable(test_wireguard_address_allocation testWireguardAddressAllocation.cpp)
     target_link_libraries(test_wireguard_address_allocation PRIVATE Qt6::Test test_common)
     add_test(NAME WireguardAddressAllocationTest COMMAND test_wireguard_address_allocation)
     if(WIN32)
+        foreach(_offline_test Profiles UpgradeFlow Devices ProcessIdentity StopOwned)
+            add_test(NAME OfflineUpdate${_offline_test}Test
+                COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+                    -NoProfile -ExecutionPolicy Bypass -File
+                    "${CMAKE_SOURCE_DIR}/deploy/windows/offline-update/tests/Test-${_offline_test}.ps1")
+        endforeach()
+        if(D1MISVPN_WINDOWS_FORK)
+            add_executable(test_secure_settings_isolation testSecureSettingsIsolation.cpp)
+            target_link_libraries(test_secure_settings_isolation PRIVATE Qt6::Test test_common advapi32)
+            add_test(NAME SecureSettingsIsolationTest COMMAND test_secure_settings_isolation)
+        endif()
+        add_executable(test_windows_route_ownership testWindowsRouteOwnership.cpp)
+        target_include_directories(test_windows_route_ownership PRIVATE ..)
+        target_link_libraries(test_windows_route_ownership PRIVATE Qt6::Test iphlpapi ws2_32)
+        add_test(NAME WindowsRouteOwnershipTest COMMAND test_windows_route_ownership)
+        add_executable(test_owned_process_job testOwnedProcessJob.cpp)
+        target_link_libraries(test_owned_process_job PRIVATE Qt6::Test)
+        add_test(NAME OwnedProcessJobTest COMMAND test_owned_process_job)
+        add_executable(test_windows_tun_address testWindowsTunAddress.cpp)
+        target_link_libraries(test_windows_tun_address PRIVATE Qt6::Test iphlpapi ws2_32)
+        add_test(NAME WindowsTunAddressTest COMMAND test_windows_tun_address)
         add_executable(test_windows_endpoint_route testWindowsEndpointRoute.cpp
             ../platforms/windows/daemon/windowsroutemonitor.cpp
             ../platforms/windows/daemon/windowsroutemonitor.h)

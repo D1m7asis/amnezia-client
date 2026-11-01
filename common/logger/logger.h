@@ -31,6 +31,7 @@ public:
     static QString serviceLogsFilePath();
     static QString systemLogDir();
 
+    static void recordFailure(const QString &stage, qint64 code);
     static QString getLogFile();
     static QString getServiceLogFile();
 

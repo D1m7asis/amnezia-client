@@ -2,6 +2,10 @@
 #define IPCSERVERPROCESS_H
 
 #include "ipc.h"
+#include "version.h"
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+#include "ownedprocessjob.h"
+#endif
 #include <QObject>
 
 #ifndef Q_OS_IOS
@@ -40,6 +44,9 @@ signals:
 private:
     amnezia::PermittedProcess m_program = amnezia::PermittedProcess::Invalid;
     QSharedPointer<QProcess> m_process;
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    OwnedProcessJob m_job;
+#endif
 };
 
 #else

@@ -21,6 +21,7 @@ public:
     void setValue(const QString &key, const QVariant &value);
     void remove(const QString &key);
 
+    bool profileStoreReadable() const;
     QByteArray backupAppConfig() const;
     bool restoreAppConfig(const QByteArray &json);
 
@@ -32,6 +33,7 @@ private:
 
     bool encryptionRequired() const;
 
+    bool loadForkKeys() const;
     QByteArray getEncKey() const;
     QByteArray getEncIv() const;
 

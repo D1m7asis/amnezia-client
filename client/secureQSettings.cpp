@@ -1,4 +1,15 @@
 #include "secureQSettings.h"
+#include "version.h"
+#include "settingsKeyMigration.h"
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QDir>
+#include <QCryptographicHash>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <wincred.h>
+#include <wincrypt.h>
+#endif
 
 #include "core/utils/utilities.h"
 #include "cryptoUtils.h"
@@ -216,6 +227,9 @@ QByteArray SecureQSettings::getEncKey() const
     if (!m_key.isEmpty()) {
         return m_key;
     }
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    return loadForkKeys() ? m_key : QByteArray();
+#endif
     // load keys from system key storage
     m_key = getSecTag(settingsKeyTag);
 
@@ -244,6 +258,9 @@ QByteArray SecureQSettings::getEncIv() const
     if (!m_iv.isEmpty()) {
         return m_iv;
     }
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    return loadForkKeys() ? m_iv : QByteArray();
+#endif
     // load keys from system key storage
     m_iv = getSecTag(settingsIvTag);
 
@@ -298,4 +315,114 @@ void SecureQSettings::setSecTag(const QString &tag, const QByteArray &data)
     if (job->error()) {
         qCritical() << "SecureQSettings::setSecTag Error:" << job->errorString();
     }
+}
+
+bool SecureQSettings::loadForkKeys() const
+{
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    const QString target = QString("%1/%2/%3/settingsMaterial-v1")
+        .arg(keyChainName, m_settings.organizationName(), m_settings.applicationName());
+    auto read = [](const QString &tag) -> settingsKeys::Read {
+        PCREDENTIALW credential = nullptr;
+        if (!CredReadW(reinterpret_cast<LPCWSTR>(tag.utf16()), CRED_TYPE_GENERIC, 0, &credential))
+            return { GetLastError() == ERROR_NOT_FOUND ? settingsKeys::Status::Missing
+                                                      : settingsKeys::Status::Error, {} };
+        QByteArray data(reinterpret_cast<const char *>(credential->CredentialBlob), credential->CredentialBlobSize);
+        CredFree(credential);
+        return { settingsKeys::Status::Found, data };
+    };
+    const QByteArray stored = m_settings.value("Servers/serversList").toByteArray();
+    const bool encrypted = stored.startsWith(magicString);
+    if (m_settings.contains("Servers/serversList") && !encrypted
+        && m_settings.value("Conf/encrypted").toBool()) {
+        qCritical() << "Settings stage=encrypted-envelope invalid; refusing replacement keys";
+        return false;
+    }
+    auto validate = [&](const QByteArray &material) {
+        if (!encrypted)
+            return true;
+        const auto plain = CryptoUtils::decryptAes256Cbc(stored.mid(magicString.size()),
+                                                       material.left(32), material.mid(32));
+        QDataStream stream(plain);
+        QVariant decoded;
+        stream >> decoded;
+        QJsonParseError error;
+        const auto document = QJsonDocument::fromJson(decoded.toByteArray(), &error);
+        return stream.status() == QDataStream::Ok && decoded.metaType().id() == QMetaType::QByteArray
+            && error.error == QJsonParseError::NoError && document.isArray();
+    };
+    auto backup = [&](const QByteArray &material) {
+        QByteArray payload;
+        QDataStream stream(&payload, QIODevice::WriteOnly);
+        stream << QStringLiteral("D1m7asisVPN-settings-recovery-v1") << stored << material;
+        DATA_BLOB input { static_cast<DWORD>(payload.size()), reinterpret_cast<BYTE *>(payload.data()) }, output {};
+        if (!CryptProtectData(&input, L"D1m7asisVPN settings recovery", nullptr, nullptr, nullptr,
+                              CRYPTPROTECT_UI_FORBIDDEN, &output))
+            return false;
+        const auto protectedBytes = QByteArray(reinterpret_cast<char *>(output.pbData), output.cbData);
+        LocalFree(output.pbData);
+        const auto directory = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery";
+        if (!QDir().mkpath(directory))
+            return false;
+        const auto path = directory + "/settings-" + QCryptographicHash::hash(stored, QCryptographicHash::Sha256).toHex() + ".dpapi";
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(protectedBytes) != protectedBytes.size() || !file.commit())
+            return false;
+        QFile saved(path);
+        if (!saved.open(QIODevice::ReadOnly))
+            return false;
+        auto bytes = saved.readAll();
+        DATA_BLOB check { static_cast<DWORD>(bytes.size()), reinterpret_cast<BYTE *>(bytes.data()) }, decoded {};
+        if (!CryptUnprotectData(&check, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &decoded))
+            return false;
+        const bool equal = QByteArray(reinterpret_cast<char *>(decoded.pbData), decoded.cbData) == payload;
+        SecureZeroMemory(decoded.pbData, decoded.cbData);
+        LocalFree(decoded.pbData);
+        payload.fill(0);
+        return equal;
+    };
+    auto write = [&](const QByteArray &material) {
+        CREDENTIALW credential {};
+        credential.Type = CRED_TYPE_GENERIC;
+        credential.TargetName = const_cast<LPWSTR>(reinterpret_cast<LPCWSTR>(target.utf16()));
+        credential.CredentialBlobSize = material.size();
+        credential.CredentialBlob = reinterpret_cast<LPBYTE>(const_cast<char *>(material.constData()));
+        credential.Persist = CRED_PERSIST_LOCAL_MACHINE;
+        return CredWriteW(&credential, 0) != FALSE;
+    };
+    // Only the real legacy fork store may read the historical shared targets.
+    const bool legacyStore = m_settings.organizationName() == "D1m7asis.VPN"
+        && m_settings.applicationName() == "D1m7asisVPN";
+    settingsKeys::Store store {
+        [&]() { return read(target); },
+        [&]() { return legacyStore ? read(settingsKeyTag) : settingsKeys::Read { settingsKeys::Status::Missing, {} }; },
+        [&]() { return legacyStore ? read(settingsIvTag) : settingsKeys::Read { settingsKeys::Status::Missing, {} }; },
+        validate, backup, write, []() { return CryptoUtils::generateRandomBytes(64); }
+    };
+    const auto material = settingsKeys::load(store, encrypted);
+    if (material.size() != 64) {
+        qCritical() << "Settings stage=credential-read-or-migration failed; profiles preserved";
+        return false;
+    }
+    m_key = material.left(32);
+    m_iv = material.mid(32);
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool SecureQSettings::profileStoreReadable() const
+{
+    if (!m_settings.contains("Servers/serversList")) return true;
+#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+    if (m_settings.value("Conf/encrypted").toBool()
+        && !m_settings.value("Servers/serversList").toByteArray().startsWith(magicString))
+        return false;
+#endif
+    const auto bytes = value("Servers/serversList");
+    if (!bytes.isValid()) return false;
+    QJsonParseError error;
+    const auto document = QJsonDocument::fromJson(bytes.toByteArray(), &error);
+    return error.error == QJsonParseError::NoError && document.isArray();
 }

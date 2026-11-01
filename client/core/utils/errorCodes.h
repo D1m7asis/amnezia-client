@@ -15,6 +15,8 @@ namespace amnezia
         NoError = 0,
         UnknownError = 100,
         InternalError = 101,
+        ManagedWireguardAddressInvalid = 105,
+        XrayTunAddressFailed = 106,
         NotImplementedError = 102,
         AmneziaServiceNotRunning = 103,
         NotSupportedOnThisPlatform = 104,

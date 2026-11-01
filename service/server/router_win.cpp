@@ -1,4 +1,6 @@
 #include "router_win.h"
+#include "windowsTunAddress.h"
+#include "../../common/logger/logger.h"
 #include "version.h"
 
 #include <string>
@@ -312,73 +314,35 @@ void RouterWin::resetIpStack()
 
 bool RouterWin::createTun(const QString &dev, const QString &subnet)
 {
-    NET_LUID luid;
-    DWORD res = ConvertInterfaceAliasToLuid(reinterpret_cast<const wchar_t*>(dev.utf16()), &luid);
-    if (res != NO_ERROR) {
-        qCritical() << "Failed to convert luid: " << res;
-        return false;
-    }
-
-    HANDLE hEvent = CreateEvent(nullptr, true, false, nullptr);
-    if (!hEvent) {
-        qCritical() << "Failed to allocate event object";
-        return false;
-    }
-    auto _guardEvent = qScopeGuard([hEvent](){ CloseHandle(hEvent); });
-
-    struct {
-        HANDLE hEvent;
-        NET_LUID luid;
-        const QString &subnet;
-        bool found;
-    } ctx = { .hEvent = hEvent, .luid = luid, .subnet = subnet, .found = false };
-
-    auto cb = [](void *priv, MIB_UNICASTIPADDRESS_ROW *row, MIB_NOTIFICATION_TYPE NotificationType) {
-        auto* c = reinterpret_cast<decltype(ctx)*>(priv);
-        if (row != nullptr && row->InterfaceLuid.Value == c->luid.Value && row->Address.si_family == AF_INET) {
-            char ip[INET_ADDRSTRLEN];
-            inet_ntop(row->Address.Ipv4.sin_family, &row->Address.Ipv4.sin_addr, ip, INET_ADDRSTRLEN);
-            if (c->subnet == ip) {
-                c->found = true;
-                SetEvent(c->hEvent);
-            }
+    bool created = false;
+    const DWORD result = assignWindowsTunAddress(dev, subnet, {}, &created);
+    if (created) {
+        MIB_UNICASTIPADDRESS_ROW row {};
+        InitializeUnicastIpAddressEntry(&row);
+        if (ConvertInterfaceAliasToLuid(reinterpret_cast<const wchar_t *>(dev.utf16()), &row.InterfaceLuid) == NO_ERROR) {
+            row.Address.si_family = AF_INET;
+            inet_pton(AF_INET, subnet.toLatin1().constData(), &row.Address.Ipv4.sin_addr);
+            m_ownedTunAddresses.insert(dev, row);
         }
-    };
+    }
+    if (result != NO_ERROR) {
+        Logger::recordFailure("xray-tun-address-windows", result);
+        qCritical() << "Xray stage=tun-address Windows error=" << result;
+    }
+    return result == NO_ERROR;
+}
 
-    HANDLE hNotif;
-    res = NotifyUnicastIpAddressChange(AF_INET, cb, &ctx, false, &hNotif);
-    if (res != NO_ERROR) {
-        qCritical() << "Failed to subscribe to interface change";
+bool RouterWin::deleteTun(const QString &dev)
+{
+    auto entry = m_ownedTunAddresses.find(dev);
+    if (entry == m_ownedTunAddresses.end()) return true;
+    const DWORD result = DeleteUnicastIpAddressEntry(&entry.value());
+    if (result != NO_ERROR && result != ERROR_NOT_FOUND) {
+        qWarning() << "Xray stage=tun-address-cleanup Windows error=" << result;
         return false;
     }
-    auto _guardNotif = qScopeGuard([hNotif](){ CancelMibChangeNotify2(hNotif); });
-
-    MIB_UNICASTIPADDRESS_ROW row;
-    InitializeUnicastIpAddressEntry(&row);
-
-    row.InterfaceLuid = luid;
-    row.Address.si_family = AF_INET;
-
-    inet_pton(AF_INET, subnet.toStdString().c_str(), &row.Address.Ipv4.sin_addr);
-
-    row.OnLinkPrefixLength = 32;
-    row.ValidLifetime = 0xffffffff;
-    row.PreferredLifetime = 0xffffffff;
-    row.DadState = IpDadStatePreferred;
-
-    res = CreateUnicastIpAddressEntry(&row);
-    if (res != NO_ERROR && res != ERROR_OBJECT_ALREADY_EXISTS) {
-        qDebug() << "Failed to create IP address:" << res;
-        return false;
-    }
-
-    res = WaitForSingleObject(hEvent, 10000);
-    if (res == WAIT_TIMEOUT) {
-        qCritical() << "Timeout of waiting for IP assignment for " << dev << " device";
-        return false;
-    }
-
-    return ctx.found;
+    m_ownedTunAddresses.erase(entry);
+    return true;
 }
 
 void RouterWin::suspendWcmSvc(bool suspend)

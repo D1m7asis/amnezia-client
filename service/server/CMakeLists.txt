@@ -173,6 +173,8 @@ if(WIN32)
     )
 
     set(LIBS
+        crypt32
+        advapi32
         user32
         rasapi32
         shlwapi

@@ -315,3 +315,33 @@ ProtocolConfig WireguardConfigurator::processConfigWithExportSettings(const Expo
 {
     return ConfiguratorBase::processConfigWithExportSettings(settings, protocolConfig);
 }
+
+bool WireguardConfigurator::hasCompatibleClientAddress(const ProtocolConfig &config)
+{
+    QString address, subnet, cidr;
+    bool imported = false;
+    if (const auto *wg = config.as<WireGuardProtocolConfig>()) {
+        if (!wg->clientConfig) return true;
+        address = wg->clientConfig->clientIp;
+        subnet = wg->serverConfig.subnetAddress;
+        cidr = wg->serverConfig.subnetCidr;
+        imported = wg->serverConfig.isThirdPartyConfig;
+    } else if (const auto *wg = config.as<AwgProtocolConfig>()) {
+        if (!wg->clientConfig) return true;
+        address = wg->clientConfig->clientIp;
+        subnet = wg->serverConfig.subnetAddress;
+        cidr = wg->serverConfig.subnetCidr;
+        imported = wg->serverConfig.isThirdPartyConfig;
+    } else return true;
+    if (imported || subnet.isEmpty() || cidr.isEmpty()) return true;
+    bool ok = false;
+    const int prefix = cidr.toInt(&ok);
+    const QHostAddress network(subnet), ip(address.section('/', 0, 0));
+    if (!ok || prefix < 1 || prefix > 30 || network.protocol() != QAbstractSocket::IPv4Protocol
+        || ip.protocol() != QAbstractSocket::IPv4Protocol || !ip.isInSubnet(network, prefix))
+        return false;
+    const quint32 mask = 0xffffffffu << (32 - prefix);
+    const quint32 host = ip.toIPv4Address(), base = network.toIPv4Address() & mask;
+    return host != base && host != (base | ~mask)
+        && host != (network.toIPv4Address() == base ? base + 1 : network.toIPv4Address());
+}

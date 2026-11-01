@@ -141,6 +141,10 @@ QString errorString(ErrorCode code) {
     case(ErrorCode::SubscriptionUnavailable): errorMessage = QObject::tr("The requested subscription is not available for purchase"); break;
     case(ErrorCode::BillingNetworkError): errorMessage = QObject::tr("A network error occurred during the operation, please check the Internet connection"); break;
 
+    case(ErrorCode::ManagedWireguardAddressInvalid):
+        errorMessage = QStringLiteral("Адрес AmneziaWG не входит в подсеть сервера. Обновите этот профиль; сохранённые данные не изменены."); break;
+    case(ErrorCode::XrayTunAddressFailed):
+        errorMessage = QStringLiteral("Не удалось настроить локальный адаптер Xray. Подробности сохранены в журнале."); break;
     case(ErrorCode::InternalError):
     default:
         errorMessage = QObject::tr("Internal error"); break;

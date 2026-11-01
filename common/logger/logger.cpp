@@ -1,10 +1,13 @@
 #include "logger.h"
 
 #include <QDateTime>
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QJsonDocument>
+#include <QJsonObject>
+#include <QRegularExpression>
 #include <QMetaEnum>
 #include <QStandardPaths>
 #include <QUrl>
@@ -341,4 +344,21 @@ void Logger::LogStreamer::addMetaEnum(quint64 value, const QMetaObject *meta, co
     }
 
     m_data->m_ts << out;
+}
+
+void Logger::recordFailure(const QString &stage, qint64 code)
+{
+    if (!QRegularExpression(QStringLiteral("^[a-z0-9-]{1,48}$")).match(stage).hasMatch())
+        return;
+    const auto directory = QCoreApplication::applicationName() == SERVICE_NAME ? systemLogDir() : userLogsDir();
+    if (!QDir().mkpath(directory)) return;
+    const auto path = directory + "/failures.jsonl";
+    QFile file(path);
+    if (file.size() > 65536) {
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
+    } else if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) return;
+    file.write(QJsonDocument(QJsonObject {
+        { "timeUtc", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs) },
+        { "stage", stage }, { "code", static_cast<double>(code) }
+    }).toJson(QJsonDocument::Compact) + '\n');
 }
