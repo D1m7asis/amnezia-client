@@ -108,6 +108,10 @@ void SecureQSettings::setValue(const QString &key, const QVariant &value)
             }
 
             QByteArray encryptedValue = encryptText(decryptedValue);
+            if (encryptedValue.isEmpty()) {
+                qCritical() << "Settings encryption failed; stored profile preserved";
+                return;
+            }
             m_settings.setValue(key, magicString + encryptedValue);
         } else {
             qCritical() << "SecureQSettings::setValue Encryption required, but key is empty";
