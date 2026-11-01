@@ -9,7 +9,7 @@
 #include "core/utils/constants/protocolConstants.h"
 #include "core/utils/ipcClient.h"
 #include "core/utils/networkUtilities.h"
-#if defined(Q_OS_WIN) && D1MISVPN_WINDOWS_FORK
+#if defined(Q_OS_WIN)
 #include "core/utils/windowsVpnConflict.h"
 #endif
 #include "core/utils/serialization/serialization.h"

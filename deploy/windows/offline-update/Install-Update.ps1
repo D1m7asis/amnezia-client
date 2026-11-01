@@ -21,7 +21,7 @@ try {
  $failure=[ordered]@{timeUtc=[datetime]::UtcNow.ToString('o');success=$false;rollback=[bool]$Rollback;error=$_.Exception.Message;errorId=$_.FullyQualifiedErrorId;line=$_.InvocationInfo.ScriptLineNumber;script=[IO.Path]::GetFileName($_.InvocationInfo.ScriptName)}
  $failure | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $PSScriptRoot ('bootstrap-failure-'+[datetime]::UtcNow.ToString('yyyyMMddTHHmmssZ')+'.json'))
  Write-Host ('STOPPED: '+$_.Exception.Message) -ForegroundColor Red
- Write-Host 'Keep this folder. Check operation-* reports. Use ROLLBACK.cmd to restore 5.0.3.102.'
+ Write-Host 'Keep this folder. Check operation-* reports. Use ROLLBACK.cmd to restore the packaged previous version.'
  Read-Host 'Press Enter to close'
 }finally{if($locked){$mutex.ReleaseMutex()};$mutex.Dispose()}
 exit $exitCode
