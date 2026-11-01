@@ -120,9 +120,12 @@ try {
  if(-not $facts.Success){throw 'Post-install verification failed; use ROLLBACK.cmd'}
 } catch {
  $facts.Error=$_.Exception.Message
+ $facts.ErrorId=$_.FullyQualifiedErrorId
+ $facts.ErrorLine=$_.InvocationInfo.ScriptLineNumber
+ $facts.ErrorScript=[IO.Path]::GetFileName($_.InvocationInfo.ScriptName)
  if(Test-Path -LiteralPath (Join-Path $backup 'profiles.dpapi')){
   try{[void](Restore-VpnProfileSnapshot (Join-Path $backup 'profiles.dpapi'));$facts.ProfilesRestoredAfterFailure=$true}catch{$facts.ProfilesRestoredAfterFailure=$false}
  }
  if(Get-Service D1m7asisVPN-service -ErrorAction SilentlyContinue){& sc.exe failure D1m7asisVPN-service reset= 100 actions= restart/2000/restart/2000/restart/2000 | Out-Null}
  throw
-} finally {$facts | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $report 'result.json')}
+} finally {$facts | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $report 'result.json')}

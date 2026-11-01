@@ -4,7 +4,9 @@ $root='C:\Program Files\D1m7asisVPN'
 $script:time=[datetime]'2026-11-01T00:00:00'
 function Reset-Fixture([bool]$Running){
  $script:state=if($Running){'Running'}else{'Stopped'}
+ $script:tunnel=$true
  $script:procs=@{}
+ $script:procs[250]=[pscustomobject]@{ProcessId=250;ExecutablePath=(Join-Path $root 'D1m7asisVPN-service.exe');CreationDate=$script:time;SessionId=0}
  $script:procs[123]=[pscustomobject]@{ProcessId=123;ExecutablePath=(Join-Path $root 'D1m7asisVPN.exe');CreationDate=$script:time;SessionId=3}
  $script:procs[999]=[pscustomobject]@{ProcessId=999;ExecutablePath='C:\Program Files\AmneziaVPN\AmneziaVPN.exe';CreationDate=$script:time;SessionId=3}
  if($Running){$script:procs[200]=[pscustomobject]@{ProcessId=200;ExecutablePath=(Join-Path $root 'D1m7asisVPN-service.exe');CreationDate=$script:time;SessionId=0}}
@@ -14,9 +16,11 @@ function Reset-Fixture([bool]$Running){
 }
 function Get-CimInstance {param($ClassName,$Filter,$ErrorAction)
  if($ClassName -eq 'Win32_Service'){
+  if($Filter -like '*AmneziaWGTunnel*' -and $script:tunnel){[pscustomobject]@{Name='AmneziaWGTunnel$D1m7asisVPN';State='Running';ProcessId=250;PathName='"C:\Program Files\D1m7asisVPN\D1m7asisVPN-service.exe" tunneldaemon synthetic'}}
   if($Filter -like "*Name='D1m7asisVPN-service'*"){[pscustomobject]@{Name='D1m7asisVPN-service';State=$script:state;ProcessId=200;PathName='"C:\Program Files\D1m7asisVPN\D1m7asisVPN-service.exe"'}}
   return
  }
+ if($Filter -eq 'ProcessId='){throw 'Empty PID query attempted'}
  if($Filter -match '^ProcessId=(\d+)$'){return $script:procs[[int]$matches[1]]}
  $script:procs.Values
 }
@@ -28,7 +32,7 @@ function Get-Process {param($Id,$ErrorAction)
  return $p
 }
 function Stop-Process {param($InputObject,[switch]$Force,$ErrorAction) $script:killed+= $InputObject.Id;$script:procs.Remove([int]$InputObject.Id)}
-function Stop-Service {param($Name,$ErrorAction) if($Name -ne 'D1m7asisVPN-service'){throw 'Foreign service stopped'};$script:stoppedServices+=$Name;$script:state='Stopped';$script:procs.Remove(200)}
+function Stop-Service {param($Name,$ErrorAction) if($Name -eq 'AmneziaWGTunnel$D1m7asisVPN'){$script:tunnel=$false;$script:procs.Remove(250);return}; if($Name -ne 'D1m7asisVPN-service'){throw 'Foreign service stopped'};$script:stoppedServices+=$Name;$script:state='Stopped';$script:procs.Remove(200)}
 function sc.exe {$global:LASTEXITCODE=0}
 function Start-Sleep {param($Seconds,$Milliseconds)}
 function Get-NetAdapter {param($ErrorAction)
@@ -50,4 +54,4 @@ foreach($running in @($false,$true)){
  if(-not $script:procs.ContainsKey(888)){throw 'Official helper was affected'}
  if($script:state -ne 'Stopped'){throw 'Own service not stopped'}
 }
-'PASS: 2 complete mocked update-stop flows, including stopped service with orphan Up adapter and running service. Official VPN preserved; no real processes/services/routes changed.'
+'PASS: 2 complete mocked update-stop flows, including a tunnel service that disappears immediately after stop, orphan Up adapter and running main service. Official VPN preserved; no real processes/services/routes changed.'

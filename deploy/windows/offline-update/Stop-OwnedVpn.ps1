@@ -41,8 +41,9 @@ function Stop-OwnedVpnForUpdate {
   }
   try{Stop-Service -Name $service.Name -ErrorAction Stop}catch{}
   $deadline=(Get-Date).AddSeconds(8)
-  do{$current=Get-CimInstance Win32_Service -Filter ("Name='"+$service.Name+"'");if($current.State -eq 'Stopped'){break};Start-Sleep -Milliseconds 250}while((Get-Date) -lt $deadline)
-  if($current.State -ne 'Stopped'){
+  do{$current=Get-CimInstance Win32_Service -Filter ("Name='"+$service.Name+"'");if(-not $current -or $current.State -eq 'Stopped'){break};Start-Sleep -Milliseconds 250}while((Get-Date) -lt $deadline)
+  if($current -and $current.State -ne 'Stopped'){
+   if(-not $current.ProcessId -or [long]$current.ProcessId -le 0){throw 'Owned service is stopping without a process ID; retry after it exits'}
    $record=Get-CimInstance Win32_Process -Filter ("ProcessId="+$current.ProcessId)
    if($record.ExecutablePath -ine $backend){throw 'Owned service process identity changed'}
    if(Stop-OwnedVpnProcess $record){$stoppedProcesses++}
